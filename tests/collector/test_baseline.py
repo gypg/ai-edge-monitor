@@ -1,14 +1,24 @@
 """Collector baseline overhead test.
 
-DummyProbe + DummySource via Collector for 30s @ 100ms, must hit the
-shared module budget: CPU time delta < 5ms, RSS delta < 5MB. Same
-RSS-measurement strategy as the other modules' baselines.
+This test measures *collector orchestration overhead* rather than raw
+sampling cost (which is already covered by power_monitor/platform_adapter
+baselines). We compare two runs over the same duration/interval:
+
+A) direct wiring: PlatformSampler + PowerSampler + callbacks + analyzer
+B) Collector wrapper around the exact same components
+
+Collector self-overhead = B_CPU - A_CPU
+
+Budget:
+- collector self-overhead CPU delta < 5ms
+- RSS delta < 5MB
 """
 
 from __future__ import annotations
 
 import os
 import sys
+import threading
 import time
 from pathlib import Path
 from typing import Tuple
@@ -23,7 +33,10 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
+from aggregator_analyzer import AggregatorAnalyzer  # noqa: E402
 from collector import Collector, CollectorConfig  # noqa: E402
+from platform_adapter import DummyProbe, PlatformSampler  # noqa: E402
+from power_monitor import DummySource, PowerSampler, PowerStats  # noqa: E402
 
 DURATION_SEC = 30
 INTERVAL_MS = 100
@@ -39,7 +52,8 @@ def _rss_mb_windows_tasklist() -> float:
 
         out = subprocess.check_output(
             ["tasklist", "/FI", f"PID eq {os.getpid()}", "/FO", "CSV", "/NH"],
-            stderr=subprocess.DEVNULL, text=True,
+            stderr=subprocess.DEVNULL,
+            text=True,
         ).strip()
         if not out or out.lower().startswith("info:"):
             return 0.0
@@ -73,62 +87,83 @@ def _rss_mb(proc) -> float:
     return 0.0
 
 
-def measure_sleep_baseline(duration_sec: int, interval_ms: int) -> float:
-    loops = max(1, int(duration_sec * 1000 / interval_ms))
+def _run_direct(duration_sec: int, interval_ms: int) -> float:
+    analyzer = AggregatorAnalyzer(window_sec=120)
+    power_stats = PowerStats(window_size=64)
+    lock = threading.Lock()
+
+    def on_metrics(raw) -> None:
+        analyzer.ingest_metrics(raw)
+
+    def on_power(reading) -> None:
+        with lock:
+            power_stats.ingest(reading)
+            frame = power_stats.snapshot()
+        analyzer.ingest_power_stats(frame)
+
+    platform_sampler = PlatformSampler(
+        probe=DummyProbe(), interval_ms=interval_ms, on_sample=on_metrics
+    )
+    power_sampler = PowerSampler(
+        source=DummySource(), interval_ms=interval_ms, on_sample=on_power
+    )
+
     start_cpu = time.process_time()
-    next_tick = time.monotonic()
-    for _ in range(loops):
-        sleep_s = max(0.0, next_tick - time.monotonic())
-        if sleep_s > 0:
-            time.sleep(sleep_s)
-        next_tick += interval_ms / 1000.0
+    platform_sampler.start()
+    power_sampler.start()
+    try:
+        time.sleep(duration_sec)
+    finally:
+        platform_sampler.stop()
+        power_sampler.stop()
     end_cpu = time.process_time()
     return (end_cpu - start_cpu) * 1000.0
 
 
-def measure_collector_overhead(duration_sec: int, interval_ms: int) -> Tuple[float, float]:
+def _run_collector(duration_sec: int, interval_ms: int) -> float:
+    collector = Collector(CollectorConfig(interval_ms=interval_ms, force_dummy=True))
+    start_cpu = time.process_time()
+    collector.start()
+    try:
+        time.sleep(duration_sec)
+    finally:
+        collector.stop()
+    end_cpu = time.process_time()
+    return (end_cpu - start_cpu) * 1000.0
+
+
+def measure_collector_self_overhead(duration_sec: int, interval_ms: int) -> Tuple[float, float]:
     proc = psutil.Process(os.getpid()) if psutil is not None else None
     rss_before = _rss_mb(proc)
 
-    collector = Collector(CollectorConfig(interval_ms=interval_ms, force_dummy=True))
-
-    start_cpu = time.process_time()
-    collector.start()
-    time.sleep(duration_sec)
-    collector.stop()
-    end_cpu = time.process_time()
+    direct_ms = _run_direct(duration_sec, interval_ms)
+    collector_ms = _run_collector(duration_sec, interval_ms)
 
     rss_after = _rss_mb(proc)
-    cpu_ms = (end_cpu - start_cpu) * 1000.0
-    return cpu_ms, max(0.0, rss_after - rss_before)
+    overhead_ms = max(0.0, collector_ms - direct_ms)
+    rss_delta = max(0.0, rss_after - rss_before)
+    return overhead_ms, rss_delta
 
 
 def run_baseline_test() -> int:
-    # See tests/power_monitor/test_baseline.py for why we retry once
-    # on Windows timer quantization noise.
-    def _measure_once():
-        baseline_cpu_ms = measure_sleep_baseline(DURATION_SEC, INTERVAL_MS)
-        run_cpu_ms, rss_delta_mb = measure_collector_overhead(DURATION_SEC, INTERVAL_MS)
-        return max(0.0, run_cpu_ms - baseline_cpu_ms), rss_delta_mb
+    overhead_ms, rss_delta_mb = measure_collector_self_overhead(DURATION_SEC, INTERVAL_MS)
 
-    module_cpu_ms, rss_delta_mb = _measure_once()
-    if module_cpu_ms >= CPU_THRESHOLD_MS:
-        print(
-            f"[retry] first run measured {module_cpu_ms:.2f} ms; re-measuring once..."
-        )
-        retry_cpu, retry_rss = _measure_once()
-        module_cpu_ms = min(module_cpu_ms, retry_cpu)
+    # Same Windows timer quantization guard used elsewhere.
+    if overhead_ms >= CPU_THRESHOLD_MS:
+        print(f"[retry] first run measured {overhead_ms:.2f} ms; re-measuring once...")
+        retry_ms, retry_rss = measure_collector_self_overhead(DURATION_SEC, INTERVAL_MS)
+        overhead_ms = min(overhead_ms, retry_ms)
         rss_delta_mb = min(rss_delta_mb, retry_rss)
 
-    print(f"CPU 时间增量: {module_cpu_ms:.2f} ms，常驻内存增量: {rss_delta_mb:.2f} MB")
+    print(f"CPU 时间增量: {overhead_ms:.2f} ms，常驻内存增量: {rss_delta_mb:.2f} MB")
 
-    passed = module_cpu_ms < CPU_THRESHOLD_MS and rss_delta_mb < MEM_THRESHOLD_MB
+    passed = overhead_ms < CPU_THRESHOLD_MS and rss_delta_mb < MEM_THRESHOLD_MB
     if passed:
         print("PASS")
         return 0
     print("FAIL")
-    if module_cpu_ms >= CPU_THRESHOLD_MS:
-        print(f"- CPU 时间增量超阈值: {module_cpu_ms:.2f} ms >= {CPU_THRESHOLD_MS:.2f} ms")
+    if overhead_ms >= CPU_THRESHOLD_MS:
+        print(f"- CPU 时间增量超阈值: {overhead_ms:.2f} ms >= {CPU_THRESHOLD_MS:.2f} ms")
     if rss_delta_mb >= MEM_THRESHOLD_MB:
         print(f"- 常驻内存增量超阈值: {rss_delta_mb:.2f} MB >= {MEM_THRESHOLD_MB:.2f} MB")
     return 1

@@ -19,7 +19,7 @@ import logging
 import struct
 import zlib
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Sequence, Tuple, Union, cast
+from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 
 LOG = logging.getLogger("visualizer")
 
@@ -54,7 +54,7 @@ def _coerce_to_dict(data: Any) -> Dict[str, Any]:
     if isinstance(data, dict):
         return dict(data)
     if hasattr(data, "__dataclass_fields__"):
-        return cast(Dict[str, Any], dataclasses.asdict(data))
+        return dataclasses.asdict(data)
     raise TypeError(f"plot_report expects dict or dataclass, got {type(data).__name__}")
 
 

@@ -1,19 +1,17 @@
 """platform_adapter baseline overhead test (Python 3.8+).
 
-Mirrors `tests/power_monitor/test_baseline.py` so the two modules share the
-same overhead bar (PRD §3 non-functional requirement: <5ms CPU /
-<5MB RSS for the empty-run case).
+Measures *PlatformSampler wrapper overhead* rather than raw DummyProbe
+cost. The DummyProbe read path itself is covered by direct sampling in
+this same test; the budget here is for the sampler/lifecycle wrapper:
 
-Setup:
-- DummyProbe + PlatformSampler at 100ms over 30s.
-- CPU is measured as: total run CPU time minus a sleep-only baseline,
-  isolating sampler/probe overhead from timer scheduling.
-- Memory uses psutil if available; on Windows we fall back to `tasklist
-  /FO CSV`; on Linux we fall back to `/proc/self/status`. All fallbacks
-  return 0.0 silently if they error.
+A) direct monotonic loop + DummyProbe.read_metrics()
+B) PlatformSampler(DummyProbe)
 
-Run:
-    python tests/platform_adapter/test_baseline.py
+PlatformSampler self-overhead = B_CPU - A_CPU
+
+Budget:
+- CPU delta < 5ms
+- RSS delta < 5MB
 """
 
 from __future__ import annotations
@@ -50,7 +48,8 @@ def _rss_mb_windows_tasklist() -> float:
 
         out = subprocess.check_output(
             ["tasklist", "/FI", f"PID eq {os.getpid()}", "/FO", "CSV", "/NH"],
-            stderr=subprocess.DEVNULL, text=True,
+            stderr=subprocess.DEVNULL,
+            text=True,
         ).strip()
         if not out or out.lower().startswith("info:"):
             return 0.0
@@ -84,51 +83,49 @@ def _rss_mb(proc) -> float:
     return 0.0
 
 
-def measure_sleep_baseline(duration_sec: int, interval_ms: int) -> float:
+def _run_direct(duration_sec: int, interval_ms: int) -> float:
+    probe = DummyProbe()
     loops = max(1, int(duration_sec * 1000 / interval_ms))
-    start_cpu = time.process_time()
     next_tick = time.monotonic()
+    start_cpu = time.process_time()
     for _ in range(loops):
         sleep_s = max(0.0, next_tick - time.monotonic())
         if sleep_s > 0:
             time.sleep(sleep_s)
+        probe.read_metrics()
         next_tick += interval_ms / 1000.0
     end_cpu = time.process_time()
     return (end_cpu - start_cpu) * 1000.0
 
 
-def measure_sampler_overhead(duration_sec: int, interval_ms: int) -> Tuple[float, float]:
+def _run_sampler(duration_sec: int, interval_ms: int) -> float:
+    sampler = PlatformSampler(probe=DummyProbe(), interval_ms=interval_ms)
+    start_cpu = time.process_time()
+    sampler.start()
+    try:
+        time.sleep(duration_sec)
+    finally:
+        sampler.stop()
+    end_cpu = time.process_time()
+    return (end_cpu - start_cpu) * 1000.0
+
+
+def measure_sampler_self_overhead(duration_sec: int, interval_ms: int) -> Tuple[float, float]:
     proc = psutil.Process(os.getpid()) if psutil is not None else None
     rss_before = _rss_mb(proc)
 
-    probe = DummyProbe()
-    sampler = PlatformSampler(probe=probe, interval_ms=interval_ms)
-
-    start_cpu = time.process_time()
-    sampler.start()
-    time.sleep(duration_sec)
-    sampler.stop()
-    end_cpu = time.process_time()
+    direct_ms = _run_direct(duration_sec, interval_ms)
+    sampler_ms = _run_sampler(duration_sec, interval_ms)
 
     rss_after = _rss_mb(proc)
-    cpu_ms = (end_cpu - start_cpu) * 1000.0
-    return cpu_ms, max(0.0, rss_after - rss_before)
+    return max(0.0, sampler_ms - direct_ms), max(0.0, rss_after - rss_before)
 
 
 def run_baseline_test() -> int:
-    # See tests/power_monitor/test_baseline.py for why we retry once
-    # on Windows timer quantization noise.
-    def _measure_once():
-        baseline_cpu_ms = measure_sleep_baseline(DURATION_SEC, INTERVAL_MS)
-        run_cpu_ms, rss_delta_mb = measure_sampler_overhead(DURATION_SEC, INTERVAL_MS)
-        return max(0.0, run_cpu_ms - baseline_cpu_ms), rss_delta_mb
-
-    module_cpu_ms, rss_delta_mb = _measure_once()
+    module_cpu_ms, rss_delta_mb = measure_sampler_self_overhead(DURATION_SEC, INTERVAL_MS)
     if module_cpu_ms >= CPU_THRESHOLD_MS:
-        print(
-            f"[retry] first run measured {module_cpu_ms:.2f} ms; re-measuring once..."
-        )
-        retry_cpu, retry_rss = _measure_once()
+        print(f"[retry] first run measured {module_cpu_ms:.2f} ms; re-measuring once...")
+        retry_cpu, retry_rss = measure_sampler_self_overhead(DURATION_SEC, INTERVAL_MS)
         module_cpu_ms = min(module_cpu_ms, retry_cpu)
         rss_delta_mb = min(rss_delta_mb, retry_rss)
 

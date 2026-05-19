@@ -191,7 +191,9 @@ def run_baseline_test() -> int:
         )
     if not (EXPECTED_MIN_SESSIONS <= rep_sessions <= EXPECTED_MAX_SESSIONS):
         failures.append(
-            f"report-leg sessions {rep_sessions} not in [{EXPECTED_MIN_SESSIONS}..{EXPECTED_MAX_SESSIONS}]"
+            "report-leg sessions "
+            f"{rep_sessions} not in "
+            f"[{EXPECTED_MIN_SESSIONS}..{EXPECTED_MAX_SESSIONS}]"
         )
     if rep_count != rep_sessions:
         failures.append(f"report count {rep_count} != sessions {rep_sessions}")

@@ -92,8 +92,12 @@ def run(argv=None) -> int:
 
     log = _make_logger()
     log.info(
-        "e2e: collect -> analyze -> report (duration=%ds, interval=%dms, out_dir=%s, force_dummy=%s)",
-        duration_sec, interval_ms, out_dir, args.force_dummy,
+        "e2e: collect -> analyze -> report "
+        "(duration=%ds, interval=%dms, out_dir=%s, force_dummy=%s)",
+        duration_sec,
+        interval_ms,
+        out_dir,
+        args.force_dummy,
     )
 
     if args.force_dummy:
@@ -103,12 +107,26 @@ def run(argv=None) -> int:
         probe = select_default_probe(prefer=("procfs", "psutil"))
         source = select_default_source(prefer=("sysfs",))
 
-    log.info("selected probe: name=%s class=%s", probe.name, type(probe).__name__)
-    log.info("selected power source: name=%s class=%s", source.name, type(source).__name__)
+    log.info(
+        "selected probe: name=%s class=%s",
+        probe.name,
+        type(probe).__name__,
+    )
+    log.info(
+        "selected power source: name=%s class=%s",
+        source.name,
+        type(source).__name__,
+    )
     if probe.name == "dummy":
-        log.warning("platform probe falling back to DummyProbe — real CPU/mem readings not available")
+        log.warning(
+            "platform probe falling back to DummyProbe — "
+            "real CPU/mem readings not available"
+        )
     if source.name == "dummy":
-        log.warning("power source falling back to DummySource — real power readings not available")
+        log.warning(
+            "power source falling back to DummySource — "
+            "real power readings not available"
+        )
 
     analyzer = AggregatorAnalyzer(window_sec=max(120, duration_sec * 4))
     power_stats = PowerStats(window_size=max(64, duration_sec))
@@ -123,8 +141,16 @@ def run(argv=None) -> int:
             frame = power_stats.snapshot()
         analyzer.ingest_power_stats(frame)
 
-    platform_sampler = PlatformSampler(probe=probe, interval_ms=interval_ms, on_sample=on_raw_metrics)
-    power_sampler = PowerSampler(source=source, interval_ms=interval_ms, on_sample=on_power_reading)
+    platform_sampler = PlatformSampler(
+        probe=probe,
+        interval_ms=interval_ms,
+        on_sample=on_raw_metrics,
+    )
+    power_sampler = PowerSampler(
+        source=source,
+        interval_ms=interval_ms,
+        on_sample=on_power_reading,
+    )
 
     platform_sampler.start()
     power_sampler.start()

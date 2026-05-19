@@ -16,10 +16,12 @@
 
 运行示例：
 1) 快速自测（DummySource，缩短时长）：
-    python tools/power_acceptance.py --source dummy --duration-sec 90 --warmup-sec 10 --interval-ms 1000
+    python tools/power_acceptance.py --source dummy \
+        --duration-sec 90 --warmup-sec 10 --interval-ms 1000
 
 2) 标准验收（DummySource，12分钟）：
-    python tools/power_acceptance.py --source dummy --duration-sec 720 --warmup-sec 120 --interval-ms 1000
+    python tools/power_acceptance.py --source dummy \
+        --duration-sec 720 --warmup-sec 120 --interval-ms 1000
 
 3) sysfs 真实采集（若设备支持 /sys/class/power_supply）：
     python tools/power_acceptance.py --source sysfs --device rpi4b --interval-ms 1000
@@ -35,12 +37,12 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import os
 import random
 import time
-import os
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Optional, Literal
+from typing import Literal, Optional
 
 try:
     import psutil  # type: ignore
@@ -142,7 +144,12 @@ class SysfsPowerSource:
             if power_now.exists() and power_now.is_file():
                 self.power_now_path = power_now
                 return
-            if current_now.exists() and voltage_now.exists() and current_now.is_file() and voltage_now.is_file():
+            if (
+                current_now.exists()
+                and voltage_now.exists()
+                and current_now.is_file()
+                and voltage_now.is_file()
+            ):
                 self.current_now_path = current_now
                 self.voltage_now_path = voltage_now
                 return
@@ -401,7 +408,11 @@ def run_acceptance(
         latency_p95=percentile(latencies, 95),
         latency_p99=percentile(latencies, 99),
         jitter_p95=percentile(jitters, 95),
-        monitor_cpu_pct_p95=percentile(cpu_pct_samples[warmup_loops:], 95) if cpu_pct_samples[warmup_loops:] else 0.0,
+        monitor_cpu_pct_p95=(
+            percentile(cpu_pct_samples[warmup_loops:], 95)
+            if cpu_pct_samples[warmup_loops:]
+            else 0.0
+        ),
         fail_rate=fail_rate,
         rss_delta_mb=rss_delta_mb,
         sample_count=eval_samples,
@@ -411,12 +422,28 @@ def run_acceptance(
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Power monitor acceptance benchmark")
-    parser.add_argument("--device", default="x86_edge", choices=["jetson_nano", "rpi4b", "x86_edge"])
+    parser = argparse.ArgumentParser(
+        description="Power monitor acceptance benchmark"
+    )
+    parser.add_argument(
+        "--device",
+        default="x86_edge",
+        choices=["jetson_nano", "rpi4b", "x86_edge"],
+    )
     parser.add_argument("--source", default="dummy", choices=["dummy", "sysfs"])
     parser.add_argument("--interval-ms", type=int, default=1000)
-    parser.add_argument("--duration-sec", type=int, default=720, help="Total duration in seconds (default 12min)")
-    parser.add_argument("--warmup-sec", type=int, default=120, help="Warmup duration in seconds (default 2min)")
+    parser.add_argument(
+        "--duration-sec",
+        type=int,
+        default=720,
+        help="Total duration in seconds (default 12min)",
+    )
+    parser.add_argument(
+        "--warmup-sec",
+        type=int,
+        default=120,
+        help="Warmup duration in seconds (default 2min)",
+    )
     parser.add_argument("--report-json", default="")
     return parser.parse_args()
 
@@ -443,7 +470,10 @@ def main() -> int:
             print(f"- {reason}")
 
     if args.report_json:
-        Path(args.report_json).write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
+        Path(args.report_json).write_text(
+            json.dumps(result, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
 
     return 0 if result["pass"] else 1
 

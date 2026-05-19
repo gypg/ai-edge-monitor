@@ -1,0 +1,123 @@
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ai-edge-monitor"
+version = "0.1.0"
+description = "AI-assisted lightweight monitoring for embedded edge devices (Jetson / Raspberry Pi / x86 edge)."
+readme = "README.md"
+requires-python = ">=3.8"
+license = { text = "Proprietary" }
+authors = [{ name = "ai-edge-monitor maintainers" }]
+keywords = ["embedded", "monitoring", "jetson", "raspberry-pi", "power", "telemetry"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: Microsoft :: Windows",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: System :: Monitoring",
+]
+dependencies = []
+
+[project.optional-dependencies]
+psutil = ["psutil>=5.9"]
+viz = ["matplotlib>=3.5"]
+all = ["psutil>=5.9", "matplotlib>=3.5"]
+dev = [
+    "psutil>=5.9",
+    "matplotlib>=3.5",
+    "black>=24.0",
+    "isort>=5.13",
+    "mypy>=1.8",
+    "pre-commit>=3.5",
+]
+
+[project.scripts]
+ai-edge-visualizer = "visualizer.__main__:main"
+
+[project.urls]
+Documentation = "docs/prd/README.md"
+Changelog = "docs/changelog/"
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = [
+    "aggregator_analyzer*",
+    "collector*",
+    "platform_adapter*",
+    "power_monitor*",
+    "runtime_guardian*",
+    "scenarios*",
+    "scheduler*",
+    "visualizer*",
+]
+exclude = ["__pycache__*"]
+
+# ---------------------------------------------------------------------------
+# Tooling configuration
+# ---------------------------------------------------------------------------
+
+[tool.black]
+line-length = 100
+target-version = ["py38", "py39", "py310", "py311", "py312"]
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+    \.git
+  | \.mypy_cache
+  | \.venv
+  | build
+  | dist
+  | node_modules
+  | __pycache__
+)/
+'''
+
+[tool.isort]
+profile = "black"
+line_length = 100
+src_paths = ["src", "tests", "integration", "examples", "tools"]
+known_first_party = [
+    "aggregator_analyzer",
+    "collector",
+    "platform_adapter",
+    "power_monitor",
+    "runtime_guardian",
+    "scenarios",
+    "scheduler",
+    "visualizer",
+]
+
+[tool.mypy]
+python_version = "3.8"
+ignore_missing_imports = true
+follow_imports = "silent"
+warn_unused_ignores = true
+warn_redundant_casts = true
+no_implicit_optional = true
+check_untyped_defs = true
+disallow_incomplete_defs = false
+disallow_untyped_defs = false
+files = ["src"]
+
+[[tool.mypy.overrides]]
+module = ["matplotlib.*", "psutil.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+# We do not use pytest as the primary harness — the project's tests are
+# script-style with explicit PASS/FAIL prints + sys.exit codes. Listed
+# here only so a future pytest collection won't pick up legacy caches.
+testpaths = ["tests", "integration"]
+python_files = ["test_*.py"]
+norecursedirs = ["__pycache__", "node_modules", ".git"]

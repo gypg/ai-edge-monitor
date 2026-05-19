@@ -1,0 +1,48 @@
+# Local dev:
+#     pip install pre-commit && pre-commit install
+#     pre-commit run --all-files
+#
+# CI: see .github/workflows/test.yml — pre-commit runs on every push/PR.
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-toml
+      - id: check-added-large-files
+        args: ["--maxkb=512"]
+      - id: check-merge-conflict
+      - id: mixed-line-ending
+        args: ["--fix=lf"]
+        # Keep the Windows-CRLF state of generated PNG sidecars and report
+        # artifacts out of the picture by exclusion below.
+        exclude: |
+          (?x)^(
+            docs/test_report/.*|
+            integration/test_report\.png(\.json)?
+          )$
+
+  - repo: https://github.com/psf/black
+    rev: 24.10.0
+    hooks:
+      - id: black
+        language_version: python3
+        args: ["--config", "pyproject.toml"]
+
+  - repo: https://github.com/pycqa/isort
+    rev: 5.13.2
+    hooks:
+      - id: isort
+        args: ["--settings-path", "pyproject.toml"]
+
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.13.0
+    hooks:
+      - id: mypy
+        args: ["--config-file", "pyproject.toml"]
+        additional_dependencies: []
+        # mypy is slow; only run on the package source by default.
+        files: ^src/

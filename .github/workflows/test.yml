@@ -1,0 +1,103 @@
+name: tests
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+  workflow_dispatch:
+
+jobs:
+  lint:
+    name: pre-commit (black / isort / mypy)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: install dev tooling
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pre-commit
+      - name: run pre-commit on changed files
+        # On push, run only on changed files for fast feedback.
+        # On schedule/dispatch, run --all-files (override below).
+        run: pre-commit run --from-ref ${{ github.event.before || 'HEAD~1' }} --to-ref HEAD || pre-commit run --all-files
+
+  tests:
+    name: tests (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.8", "3.10", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: install project (editable, with optional psutil + matplotlib)
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[all]"
+
+      - name: show selected sources (sysfs / procfs probe availability)
+        run: |
+          python - <<'PY'
+          import os, sys
+          print("sys.platform =", sys.platform)
+          print("/proc/stat readable:", os.path.isfile("/proc/stat"))
+          print("/sys/class/power_supply present:", os.path.isdir("/sys/class/power_supply"))
+          PY
+
+      # ---------- Baselines (all test_*.py under tests/**) ----------
+      - name: run all baseline script tests in tests/**
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t TEST_FILES < <(find tests -type f -name 'test_*.py' | sort)
+          echo "Found ${#TEST_FILES[@]} tests under tests/**"
+          for f in "${TEST_FILES[@]}"; do
+            echo "===== RUN $f ====="
+            python "$f"
+          done
+
+      # ---------- Integration (all integration/test_*.py) ----------
+      - name: run all integration script tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t INTEG_FILES < <(find integration -maxdepth 1 -type f -name 'test_*.py' | sort)
+          echo "Found ${#INTEG_FILES[@]} integration tests"
+          for f in "${INTEG_FILES[@]}"; do
+            echo "===== RUN $f ====="
+            python "$f"
+          done
+
+      - name: examples — sample report
+        run: python examples/generate_report.py
+
+      # ---------- Artifacts ----------
+      - name: upload reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reports-py${{ matrix.python-version }}
+          path: |
+            integration/test_report.png
+            integration/test_report.png.json
+            integration/_*_artifacts/**/*.png
+            integration/_*_artifacts/**/*.png.json
+            docs/test_report/artifacts/*.png
+            docs/test_report/artifacts/*.png.json
+            docs/test_report/scenarios/*.png
+            docs/test_report/scenarios/*.png.json
+            examples/sample_report.png
+            examples/sample_report.png.json
+          if-no-files-found: warn
+          retention-days: 14

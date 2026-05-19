@@ -5,6 +5,7 @@ monitoring. It is designed to run on Python 3.8+ and focuses on low-overhead
 sampling and simple rolling statistics.
 """
 
+from .sampler import PowerSampler
 from .source import (
     DummySource,
     PowerReading,
@@ -12,7 +13,6 @@ from .source import (
     SysfsPowerSource,
     select_default_source,
 )
-from .sampler import PowerSampler
 from .stats import PowerStats, PowerStatsFrame, PowerStatsSnapshot
 
 __all__ = [

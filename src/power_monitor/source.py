@@ -12,11 +12,11 @@ Notes:
 from __future__ import annotations
 
 import os
+import random
+import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import List, Literal, Optional, Protocol, Tuple
-import random
-import time
 
 Quality = Literal["raw", "derived", "estimated", "unavailable"]
 ReadStatus = Literal["ok", "timeout", "io_error", "parse_error", "not_supported"]

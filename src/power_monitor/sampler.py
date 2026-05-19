@@ -6,10 +6,10 @@ It can run in background thread mode or via explicit poll_once() calls.
 
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass
 from threading import Event, Lock, Thread
 from typing import Callable, Optional
-import time
 
 from .source import PowerReading, PowerSource
 

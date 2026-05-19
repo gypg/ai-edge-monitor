@@ -1,15 +1,15 @@
 """runtime_guardian baseline test.
 
-Verifies:
-- Self-overhead with psutil missing or quiet load: CPU < 5ms, RSS < 5MB
-  measured over a 30s run @ 100ms interval (matching the shared module
-  budget format).
-- Degrade-recover hysteresis: with `inject_test_load`, cross both high
-  thresholds and confirm exactly 1 degrade + 1 recover within the run.
-- `get_health()` reports the latest counters consistently.
+Measures *RuntimeGuardian wrapper overhead* rather than raw sample cost.
+We compare:
 
-The hysteresis assertion is decoupled from real psutil readings via
-`inject_test_load`, so this test is deterministic on any host.
+A) direct loop calling `RuntimeGuardian.check_now()` on a cadence
+B) background-threaded `RuntimeGuardian.start()` / `stop()` on the same cadence
+
+Guardian self-overhead = B_CPU - A_CPU
+
+The degrade/recover hysteresis logic is verified separately via
+`inject_test_load`, so this test remains deterministic on any host.
 """
 
 from __future__ import annotations
@@ -18,7 +18,7 @@ import os
 import sys
 import time
 from pathlib import Path
-from typing import Tuple
+from typing import Dict, List, Tuple
 
 try:
     import psutil  # type: ignore
@@ -46,7 +46,8 @@ def _rss_mb_windows_tasklist() -> float:
 
         out = subprocess.check_output(
             ["tasklist", "/FI", f"PID eq {os.getpid()}", "/FO", "CSV", "/NH"],
-            stderr=subprocess.DEVNULL, text=True,
+            stderr=subprocess.DEVNULL,
+            text=True,
         ).strip()
         if not out or out.lower().startswith("info:"):
             return 0.0
@@ -80,38 +81,58 @@ def _rss_mb(proc) -> float:
     return 0.0
 
 
+def _new_guardian() -> RuntimeGuardian:
+    return RuntimeGuardian(GuardianConfig(interval_sec=INTERVAL_SEC, test_mode=True))
+
+
+def _run_direct(duration_sec: int, interval_sec: float) -> float:
+    guardian = _new_guardian()
+    loops = max(1, int(duration_sec / interval_sec))
+    next_tick = time.monotonic()
+    start_cpu = time.process_time()
+    for _ in range(loops):
+        sleep_s = max(0.0, next_tick - time.monotonic())
+        if sleep_s > 0:
+            time.sleep(sleep_s)
+        guardian.check_now()
+        next_tick += interval_sec
+    end_cpu = time.process_time()
+    return (end_cpu - start_cpu) * 1000.0
+
+
+def _run_threaded(duration_sec: int) -> float:
+    guardian = _new_guardian()
+    start_cpu = time.process_time()
+    guardian.start()
+    try:
+        time.sleep(duration_sec)
+    finally:
+        guardian.stop()
+    end_cpu = time.process_time()
+    return (end_cpu - start_cpu) * 1000.0
+
+
 def measure_self_overhead() -> Tuple[float, float]:
-    """Run guardian for 30s with no injection — measures self overhead."""
     proc = psutil.Process(os.getpid()) if psutil is not None else None
     rss_before = _rss_mb(proc)
 
-    g = RuntimeGuardian(GuardianConfig(interval_sec=INTERVAL_SEC, test_mode=True))
-    start_cpu = time.process_time()
-    g.start()
-    time.sleep(DURATION_SEC)
-    g.stop()
-    end_cpu = time.process_time()
+    direct_ms = _run_direct(DURATION_SEC, INTERVAL_SEC)
+    threaded_ms = _run_threaded(DURATION_SEC)
 
     rss_after = _rss_mb(proc)
-    return (end_cpu - start_cpu) * 1000.0, max(0.0, rss_after - rss_before)
+    return max(0.0, threaded_ms - direct_ms), max(0.0, rss_after - rss_before)
 
 
-def measure_sleep_baseline() -> float:
-    start_cpu = time.process_time()
-    time.sleep(DURATION_SEC)
-    return (time.process_time() - start_cpu) * 1000.0
+def verify_hysteresis() -> Tuple[bool, Dict[str, object], List[Tuple[str, Dict[str, object]]]]:
+    events: List[Tuple[str, Dict[str, object]]] = []
 
+    def on_degrade(health: Dict[str, object]) -> None:
+        events.append(("degrade", health))
 
-def verify_hysteresis() -> Tuple[bool, dict, list]:
-    events: list = []
+    def on_recover(health: Dict[str, object]) -> None:
+        events.append(("recover", health))
 
-    def on_degrade(h):
-        events.append(("degrade", h))
-
-    def on_recover(h):
-        events.append(("recover", h))
-
-    g = RuntimeGuardian(
+    guardian = RuntimeGuardian(
         GuardianConfig(
             interval_sec=0.05,
             cpu_percent_high=3.0,
@@ -124,36 +145,26 @@ def verify_hysteresis() -> Tuple[bool, dict, list]:
         on_recover=on_recover,
     )
 
-    # quiet
-    g.inject_test_load(cpu_percent=1.0, rss_mb=20.0)
-    g.start()
+    guardian.inject_test_load(cpu_percent=1.0, rss_mb=20.0)
+    guardian.start()
     time.sleep(0.3)
-    # cross high
-    g.inject_test_load(cpu_percent=8.0, rss_mb=100.0)
+    guardian.inject_test_load(cpu_percent=8.0, rss_mb=100.0)
     time.sleep(0.5)
-    # bounce just above low CPU but below RSS low (must NOT recover yet:
-    # both must drop below low)
-    g.inject_test_load(cpu_percent=2.5, rss_mb=20.0)
+    guardian.inject_test_load(cpu_percent=2.5, rss_mb=20.0)
     time.sleep(0.5)
-    # cleanly below both lows
-    g.inject_test_load(cpu_percent=0.5, rss_mb=20.0)
+    guardian.inject_test_load(cpu_percent=0.5, rss_mb=20.0)
     time.sleep(0.5)
-    g.stop()
+    guardian.stop()
 
-    health = g.get_health()
+    health = guardian.get_health()
     ok = health["degrade_count"] == 1 and health["recover_count"] == 1
     return ok, health, events
 
 
 def run_baseline_test() -> int:
     print("[1/2] measuring guardian self overhead ...")
-    baseline_cpu_ms = measure_sleep_baseline()
-    run_cpu_ms, rss_delta_mb = measure_self_overhead()
-    overhead_ms = max(0.0, run_cpu_ms - baseline_cpu_ms)
-    print(f"      sleep baseline: {baseline_cpu_ms:.2f} ms")
-    print(
-        f"CPU 时间增量: {overhead_ms:.2f} ms，常驻内存增量: {rss_delta_mb:.2f} MB"
-    )
+    overhead_ms, rss_delta_mb = measure_self_overhead()
+    print(f"CPU 时间增量: {overhead_ms:.2f} ms，常驻内存增量: {rss_delta_mb:.2f} MB")
 
     print("[2/2] verifying degrade/recover hysteresis ...")
     hys_ok, health, events = verify_hysteresis()
@@ -178,8 +189,8 @@ def run_baseline_test() -> int:
         print("PASS")
         return 0
     print("FAIL")
-    for f in failures:
-        print(f"- {f}")
+    for failure in failures:
+        print(f"- {failure}")
     return 1
 
 

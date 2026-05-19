@@ -1,0 +1,14 @@
+* text=auto
+
+# Force LF for source and config files so pre-commit doesn't rewrite them in CI
+*.py text eol=lf
+*.md text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.toml text eol=lf
+*.json text eol=lf
+*.sh text eol=lf
+
+# Keep Windows scripts as CRLF if any are added later
+*.bat text eol=crlf
+*.cmd text eol=crlf

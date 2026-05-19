@@ -19,12 +19,12 @@ import logging
 import struct
 import zlib
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Sequence, Tuple, cast
+from typing import Any, Dict, List, Optional, Sequence, Tuple, Union, cast
 
 LOG = logging.getLogger("visualizer")
 
 
-def plot_report(data: Any, output_path: str | Path) -> str:
+def plot_report(data: Any, output_path: Union[str, Path]) -> str:
     """Write a PNG report at `output_path`. Returns the resolved path.
 
     `data` may be a dict (preferred — JSON-friendly) or a WindowSummary

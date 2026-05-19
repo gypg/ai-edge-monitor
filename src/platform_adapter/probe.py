@@ -18,7 +18,7 @@ import random
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Dict, Literal, Optional
+from typing import Dict, Literal, Optional, Protocol
 
 ReadStatus = Literal["ok", "io_error", "parse_error", "not_supported", "partial"]
 
@@ -94,6 +94,11 @@ class PlatformProbe(ABC):
         """Release resources (default no-op)."""
 
 
+class _ScenarioLike(Protocol):
+    def sample(self) -> object:
+        ...
+
+
 class DummyProbe(PlatformProbe):
     """Synthetic probe used for tests and development hosts.
 
@@ -114,7 +119,7 @@ class DummyProbe(PlatformProbe):
         self,
         base_cpu: float = 12.0,
         jitter: float = 2.0,
-        scenario: Optional["object"] = None,
+        scenario: Optional[_ScenarioLike] = None,
     ) -> None:
         self.base_cpu = base_cpu
         self.jitter = jitter
@@ -136,12 +141,12 @@ class DummyProbe(PlatformProbe):
         ts_ms = int(time.time() * 1000)
         if self.scenario is not None:
             point = self.scenario.sample()
-            cpu = float(point.cpu_percent)
-            mem_used = float(point.mem_used_mb)
-            temp = (
-                None if point.temperature_c is None
-                else float(point.temperature_c)
-            )
+            if not hasattr(point, "cpu_percent") or not hasattr(point, "mem_used_mb"):
+                raise TypeError("scenario.sample() must expose cpu_percent/mem_used_mb")
+            cpu = float(getattr(point, "cpu_percent"))
+            mem_used = float(getattr(point, "mem_used_mb"))
+            temperature = getattr(point, "temperature_c", None)
+            temp = None if temperature is None else float(temperature)
         else:
             cpu = max(0.0, min(100.0, self.base_cpu + random.uniform(-self.jitter, self.jitter)))
             mem_used = 512.0

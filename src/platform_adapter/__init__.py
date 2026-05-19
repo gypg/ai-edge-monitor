@@ -16,7 +16,7 @@ Power collection lives in `power_monitor`, not here. See
 
 from __future__ import annotations
 
-from typing import Tuple
+from typing import List, Tuple
 
 from .probe import DummyProbe, PlatformCaps, PlatformProbe, RawMetrics
 from .procfs_probe import ProcfsProbe
@@ -26,7 +26,7 @@ from .sampler import PlatformSampler
 
 def select_default_probe(prefer: Tuple[str, ...] = ("procfs", "psutil")) -> PlatformProbe:
     """Return the first available probe from `prefer`, falling back to DummyProbe."""
-    candidates = []
+    candidates: List[PlatformProbe] = []
     for name in prefer:
         if name == "procfs":
             candidates.append(ProcfsProbe())

@@ -31,10 +31,11 @@ from typing import Any, Callable, Dict, Optional
 LOG = logging.getLogger("runtime_guardian")
 
 try:
-    import psutil  # type: ignore
+    import psutil
+
     _PSUTIL_OK = True
 except ModuleNotFoundError:
-    psutil = None  # type: ignore
+    psutil = None
     _PSUTIL_OK = False
 
 

@@ -14,7 +14,7 @@ from __future__ import annotations
 import os
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import List, Literal, Optional, Tuple
+from typing import List, Literal, Optional, Protocol, Tuple
 import random
 import time
 
@@ -70,6 +70,11 @@ class PowerSource(ABC):
         """Release source resources (default no-op)."""
 
 
+class _ScenarioLike(Protocol):
+    def sample(self) -> object:
+        ...
+
+
 class DummySource(PowerSource):
     """Deterministic-ish fake source for tests and benchmarks.
 
@@ -88,7 +93,7 @@ class DummySource(PowerSource):
         base_watt: float = 8.0,
         jitter_watt: float = 1.0,
         fail_rate: float = 0.0,
-        scenario: Optional["object"] = None,
+        scenario: Optional[_ScenarioLike] = None,
     ) -> None:
         self.base_watt = base_watt
         self.jitter_watt = jitter_watt
@@ -116,7 +121,9 @@ class DummySource(PowerSource):
 
         if self.scenario is not None:
             point = self.scenario.sample()
-            power = max(0.1, float(point.power_watt))
+            if not hasattr(point, "power_watt"):
+                raise TypeError("scenario.sample() must expose power_watt")
+            power = max(0.1, float(getattr(point, "power_watt")))
         else:
             power = max(0.1, self.base_watt + random.uniform(-self.jitter_watt, self.jitter_watt))
         voltage = 5.0

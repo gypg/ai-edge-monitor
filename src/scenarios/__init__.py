@@ -24,7 +24,7 @@ import random
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Optional
+from typing import Dict, Optional, Type
 
 
 @dataclass
@@ -157,7 +157,7 @@ class ThrottledScenario(Scenario):
         return ScenarioPoint(cpu, mem, temp_v, power)
 
 
-_REGISTRY = {
+_REGISTRY: Dict[str, Type[Scenario]] = {
     "idle": IdleScenario,
     "inference": InferenceScenario,
     "throttled": ThrottledScenario,

@@ -19,15 +19,12 @@ import logging
 import struct
 import zlib
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
+from typing import Any, Dict, List, Optional, Sequence, Tuple, cast
 
 LOG = logging.getLogger("visualizer")
 
 
-_PathLike = Union[str, Path]
-
-
-def plot_report(data: Union[Dict[str, Any], Any], output_path: _PathLike) -> str:
+def plot_report(data: Any, output_path: str | Path) -> str:
     """Write a PNG report at `output_path`. Returns the resolved path.
 
     `data` may be a dict (preferred — JSON-friendly) or a WindowSummary
@@ -56,16 +53,17 @@ def plot_report(data: Union[Dict[str, Any], Any], output_path: _PathLike) -> str
 def _coerce_to_dict(data: Any) -> Dict[str, Any]:
     if isinstance(data, dict):
         return dict(data)
-    if dataclasses.is_dataclass(data):
-        return dataclasses.asdict(data)
+    if hasattr(data, "__dataclass_fields__"):
+        return cast(Dict[str, Any], dataclasses.asdict(data))
     raise TypeError(f"plot_report expects dict or dataclass, got {type(data).__name__}")
 
 
 def _try_matplotlib_backend(data: Dict[str, Any], out: Path) -> Optional[str]:
     try:
-        import matplotlib  # type: ignore
+        import matplotlib
+
         matplotlib.use("Agg")
-        import matplotlib.pyplot as plt  # type: ignore
+        import matplotlib.pyplot as plt
     except Exception:
         return None
 

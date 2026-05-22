@@ -102,9 +102,15 @@ class ProcfsProbe(PlatformProbe):
 
         if not self.is_available():
             return RawMetrics(
-                ts_ms=ts_ms, cpu_percent=0.0, mem_used_mb=0.0, mem_total_mb=0.0,
-                gpu_percent=None, gpu_mem_used_mb=None, temperature_c=None,
-                probe_name=self.name, status="not_supported",
+                ts_ms=ts_ms,
+                cpu_percent=0.0,
+                mem_used_mb=0.0,
+                mem_total_mb=0.0,
+                gpu_percent=None,
+                gpu_mem_used_mb=None,
+                temperature_c=None,
+                probe_name=self.name,
+                status="not_supported",
                 latency_ms=(time.perf_counter() - started) * 1000.0,
                 error_message="/proc not available",
             )

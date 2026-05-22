@@ -71,8 +71,7 @@ class PowerSource(ABC):
 
 
 class _ScenarioLike(Protocol):
-    def sample(self) -> object:
-        ...
+    def sample(self) -> object: ...
 
 
 class DummySource(PowerSource):

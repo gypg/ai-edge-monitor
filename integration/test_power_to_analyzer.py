@@ -45,7 +45,6 @@ from power_monitor import (  # noqa: E402  (path setup above)
     select_default_source,
 )
 
-
 DURATION_SEC = 10
 INTERVAL_MS = 1000
 
@@ -126,7 +125,9 @@ def run() -> int:
     source = select_default_source(prefer=("sysfs",))
     log.info(
         "selected source: name=%s available=%s class=%s",
-        source.name, source.is_available(), type(source).__name__,
+        source.name,
+        source.is_available(),
+        type(source).__name__,
     )
     if source.name != "sysfs":
         log.warning(
@@ -161,8 +162,11 @@ def run() -> int:
         time.sleep(DURATION_SEC)
     finally:
         sampler.stop()
-    log.info("sampler stopped: total_samples=%d last_jitter_ms=%.2f",
-             sampler.sample_count, sampler.last_jitter_ms)
+    log.info(
+        "sampler stopped: total_samples=%d last_jitter_ms=%.2f",
+        sampler.sample_count,
+        sampler.last_jitter_ms,
+    )
 
     received = len(aggregator.received)
     violations = aggregator.shape_violations

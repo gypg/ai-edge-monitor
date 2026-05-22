@@ -43,9 +43,7 @@ def _make_logger() -> logging.Logger:
     log.setLevel(logging.INFO)
     if not log.handlers:
         h = logging.StreamHandler(stream=sys.stdout)
-        h.setFormatter(logging.Formatter(
-            "%(asctime)s %(levelname)s %(name)s | %(message)s"
-        ))
+        h.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s | %(message)s"))
         log.addHandler(h)
         log.propagate = False
     return log
@@ -100,19 +98,11 @@ def run() -> int:
             log.info("injecting high load (cpu=8%%, rss=80MB)")
             guardian.inject_test_load(cpu_percent=8.0, rss_mb=80.0)
             high_injected = True
-        if (
-            high_injected
-            and not low_injected
-            and elapsed >= inject_low_at
-        ):
+        if high_injected and not low_injected and elapsed >= inject_low_at:
             log.info("injecting low load (cpu=0.5%%, rss=20MB)")
             guardian.inject_test_load(cpu_percent=0.5, rss_mb=20.0)
             low_injected = True
-        if (
-            high_injected
-            and not low_injected
-            and scheduler.is_degraded
-        ):
+        if high_injected and not low_injected and scheduler.is_degraded:
             saw_degrade_during_high = True
         time.sleep(0.5)
 
@@ -123,7 +113,8 @@ def run() -> int:
     log.info("guardian health: %s", health)
     log.info(
         "scheduler stats: sessions=%d reports=%d",
-        scheduler.session_count, scheduler.report_count,
+        scheduler.session_count,
+        scheduler.report_count,
     )
 
     failures = []
@@ -136,9 +127,7 @@ def run() -> int:
     if scheduler.session_count < 2:
         failures.append(f"scheduler.session_count {scheduler.session_count} < 2")
     if scheduler.report_count != scheduler.session_count:
-        failures.append(
-            f"reports {scheduler.report_count} != sessions {scheduler.session_count}"
-        )
+        failures.append(f"reports {scheduler.report_count} != sessions {scheduler.session_count}")
 
     for path in scheduler.reports:
         if not path.is_file():

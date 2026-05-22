@@ -70,13 +70,8 @@ class PeriodicScheduler:
         report_fn: Optional[ReportFn] = None,
         cycle_iter: Optional[Iterator[float]] = None,
     ) -> None:
-        if (
-            schedule_config.cycle_period_sec
-            < schedule_config.collect_duration_sec
-        ):
-            raise ValueError(
-                "cycle_period_sec must be >= collect_duration_sec"
-            )
+        if schedule_config.cycle_period_sec < schedule_config.collect_duration_sec:
+            raise ValueError("cycle_period_sec must be >= collect_duration_sec")
         self.collector_config = collector_config
         self.schedule_config = schedule_config
         self._report_fn = report_fn
@@ -116,7 +111,9 @@ class PeriodicScheduler:
             return
         self._stop_event.clear()
         self._thread = threading.Thread(
-            target=self._run_loop, name="scheduler", daemon=True,
+            target=self._run_loop,
+            name="scheduler",
+            daemon=True,
         )
         self._thread.start()
 
@@ -131,16 +128,19 @@ class PeriodicScheduler:
         if self._degraded:
             return
         self._degraded = True
-        LOG.info("scheduler degraded: switching to %.1fs cycle period",
-                 self.schedule_config.degraded_cycle_period_sec)
+        LOG.info(
+            "scheduler degraded: switching to %.1fs cycle period",
+            self.schedule_config.degraded_cycle_period_sec,
+        )
 
     def recover(self) -> None:
         """Return to normal cadence."""
         if not self._degraded:
             return
         self._degraded = False
-        LOG.info("scheduler recovered: back to %.1fs cycle period",
-                 self.schedule_config.cycle_period_sec)
+        LOG.info(
+            "scheduler recovered: back to %.1fs cycle period", self.schedule_config.cycle_period_sec
+        )
 
     def _current_cycle_period(self) -> float:
         if self._degraded:
@@ -170,8 +170,11 @@ class PeriodicScheduler:
             collect_for = self.schedule_config.collect_duration_sec
             LOG.info(
                 "session %d start: probe=%s source=%s collect=%.1fs degraded=%s",
-                session_idx, collector.probe_name,
-                collector.power_source_name, collect_for, self._degraded,
+                session_idx,
+                collector.probe_name,
+                collector.power_source_name,
+                collect_for,
+                self._degraded,
             )
             collector.start()
             self._stop_event.wait(timeout=collect_for)
@@ -180,16 +183,11 @@ class PeriodicScheduler:
             with self._lock:
                 self._session_count += 1
 
-            if (
-                self.schedule_config.emit_report
-                and self._report_fn is not None
-            ):
+            if self.schedule_config.emit_report and self._report_fn is not None:
                 report_dir = self.schedule_config.report_dir
                 report_dir.mkdir(parents=True, exist_ok=True)
                 report_path = (
-                    report_dir
-                    / f"{self.schedule_config.report_prefix}"
-                      f"_{session_idx:03d}.png"
+                    report_dir / f"{self.schedule_config.report_prefix}" f"_{session_idx:03d}.png"
                 )
                 summary = collector.analyzer.get_summary_dict()
                 try:
@@ -199,12 +197,14 @@ class PeriodicScheduler:
                         self._reports.append(report_path)
                     LOG.info(
                         "session %d report: %s",
-                        session_idx, report_path,
+                        session_idx,
+                        report_path,
                     )
                 except Exception as exc:
                     LOG.error(
                         "session %d report failed: %s",
-                        session_idx, exc,
+                        session_idx,
+                        exc,
                     )
 
             self._collector = None
@@ -225,5 +225,4 @@ class PeriodicScheduler:
             if sleep_for > 0:
                 self._stop_event.wait(timeout=sleep_for)
 
-        LOG.info("scheduler loop exited (%.1fs total)",
-                 time.monotonic() - loop_started)
+        LOG.info("scheduler loop exited (%.1fs total)", time.monotonic() - loop_started)

@@ -95,8 +95,7 @@ class PlatformProbe(ABC):
 
 
 class _ScenarioLike(Protocol):
-    def sample(self) -> object:
-        ...
+    def sample(self) -> object: ...
 
 
 class DummyProbe(PlatformProbe):
@@ -131,8 +130,11 @@ class DummyProbe(PlatformProbe):
     def detect_caps(self) -> PlatformCaps:
         has_temp = self.scenario is not None
         return PlatformCaps(
-            has_cpu=True, has_mem=True, has_gpu=False,
-            has_temp_sensor=has_temp, has_power_sensor=False,
+            has_cpu=True,
+            has_mem=True,
+            has_gpu=False,
+            has_temp_sensor=has_temp,
+            has_power_sensor=False,
             platform_name="dummy",
         )
 

@@ -25,9 +25,19 @@ from visualizer import plot_report  # noqa: E402
 
 
 class _RawMetricsLike:
-    __slots__ = ("ts_ms", "cpu_percent", "mem_used_mb", "mem_total_mb",
-                 "gpu_percent", "gpu_mem_used_mb", "temperature_c",
-                 "probe_name", "status", "latency_ms", "error_message")
+    __slots__ = (
+        "ts_ms",
+        "cpu_percent",
+        "mem_used_mb",
+        "mem_total_mb",
+        "gpu_percent",
+        "gpu_mem_used_mb",
+        "temperature_c",
+        "probe_name",
+        "status",
+        "latency_ms",
+        "error_message",
+    )
 
     def __init__(self, ts_ms, cpu_percent, mem_used_mb):
         self.ts_ms = ts_ms
@@ -44,10 +54,20 @@ class _RawMetricsLike:
 
 
 class _PowerStatsLike:
-    __slots__ = ("window_start_ms", "window_end_ms", "count",
-                 "avg_power_watt", "p95_power_watt", "max_power_watt",
-                 "min_power_watt", "energy_joule", "fail_rate",
-                 "fallback_count", "source_name", "quality")
+    __slots__ = (
+        "window_start_ms",
+        "window_end_ms",
+        "count",
+        "avg_power_watt",
+        "p95_power_watt",
+        "max_power_watt",
+        "min_power_watt",
+        "energy_joule",
+        "fail_rate",
+        "fallback_count",
+        "source_name",
+        "quality",
+    )
 
     def __init__(self, ts_ms, avg_w, energy_j):
         self.window_start_ms = ts_ms

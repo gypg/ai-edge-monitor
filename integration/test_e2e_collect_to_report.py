@@ -37,19 +37,9 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 from aggregator_analyzer import AggregatorAnalyzer  # noqa: E402
-from platform_adapter import (  # noqa: E402
-    DummyProbe,
-    PlatformSampler,
-    select_default_probe,
-)
-from power_monitor import (  # noqa: E402
-    DummySource,
-    PowerSampler,
-    PowerStats,
-    select_default_source,
-)
+from platform_adapter import DummyProbe, PlatformSampler, select_default_probe  # noqa: E402
+from power_monitor import DummySource, PowerSampler, PowerStats, select_default_source  # noqa: E402
 from visualizer import plot_report  # noqa: E402
-
 
 DEFAULT_DURATION_SEC = 10
 DEFAULT_INTERVAL_MS = 1000
@@ -73,11 +63,14 @@ def _parse_args(argv) -> argparse.Namespace:
     parser.add_argument("--duration-sec", type=int, default=DEFAULT_DURATION_SEC)
     parser.add_argument("--interval-ms", type=int, default=DEFAULT_INTERVAL_MS)
     parser.add_argument(
-        "--output-dir", type=str, default=str(DEFAULT_OUTPUT_DIR),
+        "--output-dir",
+        type=str,
+        default=str(DEFAULT_OUTPUT_DIR),
         help="directory where test_report.png and its JSON sidecar are written",
     )
     parser.add_argument(
-        "--force-dummy", action="store_true",
+        "--force-dummy",
+        action="store_true",
         help="skip real source probing; use DummyProbe + DummySource (CI default)",
     )
     return parser.parse_args(argv)
@@ -119,13 +112,11 @@ def run(argv=None) -> int:
     )
     if probe.name == "dummy":
         log.warning(
-            "platform probe falling back to DummyProbe — "
-            "real CPU/mem readings not available"
+            "platform probe falling back to DummyProbe — " "real CPU/mem readings not available"
         )
     if source.name == "dummy":
         log.warning(
-            "power source falling back to DummySource — "
-            "real power readings not available"
+            "power source falling back to DummySource — " "real power readings not available"
         )
 
     analyzer = AggregatorAnalyzer(window_sec=max(120, duration_sec * 4))
@@ -160,17 +151,26 @@ def run(argv=None) -> int:
         platform_sampler.stop()
         power_sampler.stop()
 
-    log.info("samplers stopped: platform=%d power=%d",
-             platform_sampler.sample_count, power_sampler.sample_count)
+    log.info(
+        "samplers stopped: platform=%d power=%d",
+        platform_sampler.sample_count,
+        power_sampler.sample_count,
+    )
 
     summary = analyzer.get_summary_dict()
     log.info(
         "summary: metrics=%d power=%d cpu_avg=%s cpu_p95=%s cpu_max=%s "
         "power_avg=%s power_p95=%s power_max=%s energy=%s quality=%s",
-        summary["sample_count_metrics"], summary["sample_count_power"],
-        summary["cpu_avg"], summary["cpu_p95"], summary["cpu_max"],
-        summary["power_avg_watt"], summary["power_p95_watt"], summary["power_max_watt"],
-        summary["energy_joule"], summary["power_quality_worst"],
+        summary["sample_count_metrics"],
+        summary["sample_count_power"],
+        summary["cpu_avg"],
+        summary["cpu_p95"],
+        summary["cpu_max"],
+        summary["power_avg_watt"],
+        summary["power_p95_watt"],
+        summary["power_max_watt"],
+        summary["energy_joule"],
+        summary["power_quality_worst"],
     )
 
     out_path = out_dir / "test_report.png"

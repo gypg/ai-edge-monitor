@@ -7,19 +7,8 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, Optional, Tuple
 
 from aggregator_analyzer import AggregatorAnalyzer
-from platform_adapter import (
-    DummyProbe,
-    PlatformProbe,
-    PlatformSampler,
-    select_default_probe,
-)
-from power_monitor import (
-    DummySource,
-    PowerSampler,
-    PowerSource,
-    PowerStats,
-    select_default_source,
-)
+from platform_adapter import DummyProbe, PlatformProbe, PlatformSampler, select_default_probe
+from power_monitor import DummySource, PowerSampler, PowerSource, PowerStats, select_default_source
 
 
 @dataclass

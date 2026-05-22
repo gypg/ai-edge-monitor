@@ -104,9 +104,7 @@ def _run_direct(duration_sec: int, interval_ms: int) -> float:
     platform_sampler = PlatformSampler(
         probe=DummyProbe(), interval_ms=interval_ms, on_sample=on_metrics
     )
-    power_sampler = PowerSampler(
-        source=DummySource(), interval_ms=interval_ms, on_sample=on_power
-    )
+    power_sampler = PowerSampler(source=DummySource(), interval_ms=interval_ms, on_sample=on_power)
 
     start_cpu = time.process_time()
     platform_sampler.start()

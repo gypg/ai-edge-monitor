@@ -596,4 +596,3 @@ def evaluate_thresholds(device_type, latency_p95, jitter_p95, fail_rate, rss_del
 
 建议在 CI/本地命令中统一为：
 - `python tools/power_acceptance.py --device jetson_nano --interval-ms 1000 --duration-sec 720`
-

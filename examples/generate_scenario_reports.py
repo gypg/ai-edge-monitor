@@ -34,15 +34,15 @@ from power_monitor import DummySource, PowerSampler, PowerStats  # noqa: E402
 from scenarios import make_scenario  # noqa: E402
 from visualizer import plot_report  # noqa: E402
 
-
 SCENARIOS = ("idle", "inference", "throttled")
 DEFAULT_DURATION_SEC = 60
 DEFAULT_INTERVAL_MS = 1000
 DEFAULT_OUTPUT_DIR = ROOT / "docs" / "test_report" / "scenarios"
 
 
-def run_scenario(name: str, duration_sec: int, interval_ms: int,
-                 output_dir: Path) -> Dict[str, Any]:
+def run_scenario(
+    name: str, duration_sec: int, interval_ms: int, output_dir: Path
+) -> Dict[str, Any]:
     scenario = make_scenario(name, seed=42)
     probe = DummyProbe(scenario=scenario)
     source = DummySource(scenario=scenario)
@@ -120,8 +120,13 @@ def _parse_args(argv) -> argparse.Namespace:
     parser.add_argument("--duration-sec", type=int, default=DEFAULT_DURATION_SEC)
     parser.add_argument("--interval-ms", type=int, default=DEFAULT_INTERVAL_MS)
     parser.add_argument("--output-dir", type=str, default=str(DEFAULT_OUTPUT_DIR))
-    parser.add_argument("--scenario", type=str, action="append", default=None,
-                        help="run only the named scenario (repeatable). default: all 3")
+    parser.add_argument(
+        "--scenario",
+        type=str,
+        action="append",
+        default=None,
+        help="run only the named scenario (repeatable). default: all 3",
+    )
     return parser.parse_args(argv)
 
 

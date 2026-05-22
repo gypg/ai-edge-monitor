@@ -38,20 +38,23 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from platform_adapter import (  # noqa: E402
-    PlatformSampler,
-    RawMetrics,
-    select_default_probe,
-)
-
+from platform_adapter import PlatformSampler, RawMetrics, select_default_probe  # noqa: E402
 
 DURATION_SEC = 10
 INTERVAL_MS = 1000
 
 EXPECTED_RAW_FIELDS = {
-    "ts_ms", "cpu_percent", "mem_used_mb", "mem_total_mb",
-    "gpu_percent", "gpu_mem_used_mb", "temperature_c",
-    "probe_name", "status", "latency_ms", "error_message",
+    "ts_ms",
+    "cpu_percent",
+    "mem_used_mb",
+    "mem_total_mb",
+    "gpu_percent",
+    "gpu_mem_used_mb",
+    "temperature_c",
+    "probe_name",
+    "status",
+    "latency_ms",
+    "error_message",
 }
 
 
@@ -109,9 +112,14 @@ class MockMetricsCollector:
         self.received.append(snap)
         self._log.info(
             "snapshot: ts=%d cpu=%.2f%% mem=%.0f/%.0fMB temp=%s probe=%s status=%s latency=%.2fms",
-            snap.ts_ms, snap.cpu_percent, snap.mem_used_mb, snap.mem_total_mb,
+            snap.ts_ms,
+            snap.cpu_percent,
+            snap.mem_used_mb,
+            snap.mem_total_mb,
             "None" if snap.temperature_c is None else f"{snap.temperature_c:.1f}C",
-            raw.probe_name, raw.status, raw.latency_ms,
+            raw.probe_name,
+            raw.status,
+            raw.latency_ms,
         )
         return snap
 
@@ -134,7 +142,10 @@ def run() -> int:
     caps = probe.detect_caps()
     log.info(
         "selected probe: name=%s class=%s available=%s caps=%s",
-        probe.name, type(probe).__name__, probe.is_available(), caps,
+        probe.name,
+        type(probe).__name__,
+        probe.is_available(),
+        caps,
     )
     if probe.name not in ("procfs", "psutil"):
         log.warning(
@@ -156,8 +167,11 @@ def run() -> int:
         time.sleep(DURATION_SEC)
     finally:
         sampler.stop()
-    log.info("sampler stopped: total_samples=%d last_jitter_ms=%.2f",
-             sampler.sample_count, sampler.last_jitter_ms)
+    log.info(
+        "sampler stopped: total_samples=%d last_jitter_ms=%.2f",
+        sampler.sample_count,
+        sampler.last_jitter_ms,
+    )
 
     received = len(collector.received)
     violations = collector.shape_violations

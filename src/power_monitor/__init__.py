@@ -6,13 +6,7 @@ sampling and simple rolling statistics.
 """
 
 from .sampler import PowerSampler
-from .source import (
-    DummySource,
-    PowerReading,
-    PowerSource,
-    SysfsPowerSource,
-    select_default_source,
-)
+from .source import DummySource, PowerReading, PowerSource, SysfsPowerSource, select_default_source
 from .stats import PowerStats, PowerStatsFrame, PowerStatsSnapshot
 
 __all__ = [

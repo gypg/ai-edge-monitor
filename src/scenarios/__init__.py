@@ -75,8 +75,7 @@ class Scenario(ABC):
         return self._sample(t)
 
     @abstractmethod
-    def _sample(self, t: float) -> ScenarioPoint:
-        ...
+    def _sample(self, t: float) -> ScenarioPoint: ...
 
 
 def _clamp(value: float, lo: float, hi: float) -> float:

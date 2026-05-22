@@ -422,9 +422,7 @@ def run_acceptance(
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
-        description="Power monitor acceptance benchmark"
-    )
+    parser = argparse.ArgumentParser(description="Power monitor acceptance benchmark")
     parser.add_argument(
         "--device",
         default="x86_edge",

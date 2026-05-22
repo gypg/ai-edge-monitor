@@ -134,23 +134,24 @@ _WIDTH = 800
 _HEIGHT = 400
 _BG = (255, 255, 255)
 _AXIS = (40, 40, 40)
-_CPU_COLOR = (33, 102, 172)   # blue
+_CPU_COLOR = (33, 102, 172)  # blue
 _POWER_COLOR = (203, 24, 29)  # red
-_MEM_COLOR = (35, 139, 69)    # green
+_MEM_COLOR = (35, 139, 69)  # green
 _PAD_L, _PAD_R, _PAD_T, _PAD_B = 60, 30, 30, 40
 
 
 def _stdlib_png_backend(data: Dict[str, Any], out: Path) -> None:
     pixels = bytearray(_WIDTH * _HEIGHT * 3)
     for i in range(0, len(pixels), 3):
-        pixels[i:i+3] = bytes(_BG)
+        pixels[i : i + 3] = bytes(_BG)
 
     _draw_axes(pixels)
 
     cpu_x, cpu_y = _project_series(
         data.get("timeline_ts_ms") or [],
         data.get("timeline_cpu") or [],
-        y_min=0.0, y_max=100.0,
+        y_min=0.0,
+        y_max=100.0,
     )
     _draw_polyline(pixels, cpu_x, cpu_y, _CPU_COLOR)
 
@@ -165,8 +166,10 @@ def _stdlib_png_backend(data: Dict[str, Any], out: Path) -> None:
     if mem_ys:
         mem_max = max(mem_ys) * 1.1 if max(mem_ys) > 0 else 1.0
         m_x, m_y = _project_series(
-            data.get("timeline_ts_ms") or [], mem_ys,
-            y_min=0.0, y_max=mem_max,
+            data.get("timeline_ts_ms") or [],
+            mem_ys,
+            y_min=0.0,
+            y_max=mem_max,
         )
         _draw_polyline(pixels, m_x, m_y, _MEM_COLOR)
 
@@ -181,8 +184,10 @@ def _draw_axes(pixels: bytearray) -> None:
 
 
 def _project_series(
-    ts: Sequence[int], ys: Sequence[float],
-    y_min: float, y_max: float,
+    ts: Sequence[int],
+    ys: Sequence[float],
+    y_min: float,
+    y_max: float,
 ) -> Tuple[List[int], List[int]]:
     if not ts or not ys or len(ts) != len(ys):
         return [], []
@@ -204,18 +209,20 @@ def _project_series(
     return xs_px, ys_px
 
 
-def _draw_polyline(pixels: bytearray, xs: Sequence[int], ys: Sequence[int],
-                   color: Tuple[int, int, int]) -> None:
+def _draw_polyline(
+    pixels: bytearray, xs: Sequence[int], ys: Sequence[int], color: Tuple[int, int, int]
+) -> None:
     if len(xs) < 2:
         if len(xs) == 1:
             _set_pixel(pixels, xs[0], ys[0], color)
         return
     for i in range(len(xs) - 1):
-        _draw_line(pixels, xs[i], ys[i], xs[i+1], ys[i+1], color)
+        _draw_line(pixels, xs[i], ys[i], xs[i + 1], ys[i + 1], color)
 
 
-def _draw_line(pixels: bytearray, x0: int, y0: int, x1: int, y1: int,
-               color: Tuple[int, int, int]) -> None:
+def _draw_line(
+    pixels: bytearray, x0: int, y0: int, x1: int, y1: int, color: Tuple[int, int, int]
+) -> None:
     # Bresenham's line algorithm.
     dx = abs(x1 - x0)
     dy = -abs(y1 - y0)
@@ -239,7 +246,7 @@ def _set_pixel(pixels: bytearray, x: int, y: int, color: Tuple[int, int, int]) -
     if x < 0 or x >= _WIDTH or y < 0 or y >= _HEIGHT:
         return
     idx = (y * _WIDTH + x) * 3
-    pixels[idx:idx+3] = bytes(color)
+    pixels[idx : idx + 3] = bytes(color)
 
 
 def _write_png(path: Path, width: int, height: int, raw_rgb: bytes) -> None:

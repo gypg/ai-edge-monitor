@@ -43,7 +43,8 @@ def _rss_mb_windows_tasklist() -> float:
 
         out = subprocess.check_output(
             ["tasklist", "/FI", f"PID eq {os.getpid()}", "/FO", "CSV", "/NH"],
-            stderr=subprocess.DEVNULL, text=True,
+            stderr=subprocess.DEVNULL,
+            text=True,
         ).strip()
         if not out or out.lower().startswith("info:"):
             return 0.0
@@ -123,11 +124,13 @@ def run_baseline() -> int:
     n = 10000
     for i in range(n):
         fake_now[0] = float(i)
-        a.ingest_metrics(_Raw(
-            ts_ms=1000 + i * 1000,
-            cpu_percent=30.0 + (i % 50),
-            mem_used_mb=500 + (i % 200),
-        ))
+        a.ingest_metrics(
+            _Raw(
+                ts_ms=1000 + i * 1000,
+                cpu_percent=30.0 + (i % 50),
+                mem_used_mb=500 + (i % 200),
+            )
+        )
         a.ingest_power_stats(_Frame(window_start_ms=1000 + i * 1000, window_end_ms=1000 + i * 1000))
 
     summary = a.get_summary_dict()

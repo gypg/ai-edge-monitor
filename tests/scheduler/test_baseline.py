@@ -58,7 +58,8 @@ def _rss_mb_windows_tasklist() -> float:
 
         out = subprocess.check_output(
             ["tasklist", "/FI", f"PID eq {os.getpid()}", "/FO", "CSV", "/NH"],
-            stderr=subprocess.DEVNULL, text=True,
+            stderr=subprocess.DEVNULL,
+            text=True,
         ).strip()
         if not out or out.lower().startswith("info:"):
             return 0.0
@@ -202,9 +203,7 @@ def run_baseline_test() -> int:
             f"scheduler self overhead {scheduler_overhead_ms:.2f} >= {CPU_THRESHOLD_MS:.2f} ms"
         )
     if rss_delta_mb >= MEM_THRESHOLD_MB:
-        failures.append(
-            f"常驻内存增量超阈值: {rss_delta_mb:.2f} >= {MEM_THRESHOLD_MB:.2f} MB"
-        )
+        failures.append(f"常驻内存增量超阈值: {rss_delta_mb:.2f} >= {MEM_THRESHOLD_MB:.2f} MB")
 
     if not failures:
         print("PASS")

@@ -27,13 +27,26 @@ DURATION_SEC = 10
 INTERVAL_MS = 1000
 
 EXPECTED_FRAME_FIELDS = {
-    "window_start_ms", "window_end_ms", "count",
-    "avg_power_watt", "p95_power_watt", "max_power_watt", "min_power_watt",
-    "energy_joule", "fail_rate", "fallback_count", "source_name", "quality",
+    "window_start_ms",
+    "window_end_ms",
+    "count",
+    "avg_power_watt",
+    "p95_power_watt",
+    "max_power_watt",
+    "min_power_watt",
+    "energy_joule",
+    "fail_rate",
+    "fallback_count",
+    "source_name",
+    "quality",
 }
 EXPECTED_SUMMARY_FIELDS = {
-    "sample_count_metrics", "sample_count_power", "cpu_avg",
-    "power_avg_watt", "timeline_cpu", "timeline_power_watt",
+    "sample_count_metrics",
+    "sample_count_power",
+    "cpu_avg",
+    "power_avg_watt",
+    "timeline_cpu",
+    "timeline_power_watt",
 }
 
 
@@ -42,9 +55,7 @@ def _make_logger() -> logging.Logger:
     log.setLevel(logging.INFO)
     if not log.handlers:
         h = logging.StreamHandler(stream=sys.stdout)
-        h.setFormatter(logging.Formatter(
-            "%(asctime)s %(levelname)s %(name)s | %(message)s"
-        ))
+        h.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s | %(message)s"))
         log.addHandler(h)
         log.propagate = False
     return log
@@ -52,15 +63,19 @@ def _make_logger() -> logging.Logger:
 
 def run() -> int:
     log = _make_logger()
-    log.info("starting collector for %ds @ %dms (force_dummy=True)",
-             DURATION_SEC, INTERVAL_MS)
+    log.info("starting collector for %ds @ %dms (force_dummy=True)", DURATION_SEC, INTERVAL_MS)
 
-    collector = Collector(CollectorConfig(
-        interval_ms=INTERVAL_MS,
-        force_dummy=True,
-    ))
-    log.info("collector wired: probe=%s power_source=%s",
-             collector.probe_name, collector.power_source_name)
+    collector = Collector(
+        CollectorConfig(
+            interval_ms=INTERVAL_MS,
+            force_dummy=True,
+        )
+    )
+    log.info(
+        "collector wired: probe=%s power_source=%s",
+        collector.probe_name,
+        collector.power_source_name,
+    )
 
     collector.start()
     try:
@@ -71,9 +86,13 @@ def run() -> int:
     stats = collector.get_session_stats()
     summary = collector.analyzer.get_summary_dict()
     log.info("session stats: %s", stats)
-    log.info("analyzer summary: metrics=%d power=%d cpu_avg=%s power_avg=%s",
-             summary["sample_count_metrics"], summary["sample_count_power"],
-             summary["cpu_avg"], summary["power_avg_watt"])
+    log.info(
+        "analyzer summary: metrics=%d power=%d cpu_avg=%s power_avg=%s",
+        summary["sample_count_metrics"],
+        summary["sample_count_power"],
+        summary["cpu_avg"],
+        summary["power_avg_watt"],
+    )
 
     failures = []
     expected_min = max(1, DURATION_SEC - 1)

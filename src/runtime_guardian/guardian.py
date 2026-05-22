@@ -115,8 +115,9 @@ class RuntimeGuardian:
                 "recover_count": self._recover_count,
             }
 
-    def inject_test_load(self, cpu_percent: Optional[float] = None,
-                         rss_mb: Optional[float] = None) -> None:
+    def inject_test_load(
+        self, cpu_percent: Optional[float] = None, rss_mb: Optional[float] = None
+    ) -> None:
         """Override the next sample with synthetic values.
 
         Either argument may be left as None to keep the real reading
@@ -143,12 +144,12 @@ class RuntimeGuardian:
         if self._thread and self._thread.is_alive():
             return
         if not self._enabled and not self.config.test_mode:
-            LOG.warning(
-                "runtime_guardian: psutil unavailable; self-protection disabled"
-            )
+            LOG.warning("runtime_guardian: psutil unavailable; self-protection disabled")
         self._stop_event.clear()
         self._thread = threading.Thread(
-            target=self._run_loop, name="runtime-guardian", daemon=True,
+            target=self._run_loop,
+            name="runtime-guardian",
+            daemon=True,
         )
         self._thread.start()
 
@@ -181,13 +182,9 @@ class RuntimeGuardian:
             self._sample_count += 1
 
             crossed_high = (
-                cpu_pct > self.config.cpu_percent_high
-                or rss_mb > self.config.rss_mb_high
+                cpu_pct > self.config.cpu_percent_high or rss_mb > self.config.rss_mb_high
             )
-            below_low = (
-                cpu_pct < self.config.cpu_percent_low
-                and rss_mb < self.config.rss_mb_low
-            )
+            below_low = cpu_pct < self.config.cpu_percent_low and rss_mb < self.config.rss_mb_low
 
             transition: Optional[str] = None
             if not self._degraded and crossed_high:

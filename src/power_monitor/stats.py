@@ -113,9 +113,7 @@ class PowerStats:
                 worst_quality = s.quality
 
         values = [
-            s.power_watt
-            for s in self._samples
-            if s.power_watt is not None and s.status == "ok"
+            s.power_watt for s in self._samples if s.power_watt is not None and s.status == "ok"
         ]
         if not values:
             return PowerStatsFrame(

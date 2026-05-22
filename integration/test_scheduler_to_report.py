@@ -34,9 +34,7 @@ def _make_logger() -> logging.Logger:
     log.setLevel(logging.INFO)
     if not log.handlers:
         h = logging.StreamHandler(stream=sys.stdout)
-        h.setFormatter(logging.Formatter(
-            "%(asctime)s %(levelname)s %(name)s | %(message)s"
-        ))
+        h.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s | %(message)s"))
         log.addHandler(h)
         log.propagate = False
     return log
@@ -63,8 +61,7 @@ def run() -> int:
     scheduler.schedule()
     time.sleep(20.0)
     scheduler.stop()
-    log.info("stopped: sessions=%d reports=%d",
-             scheduler.session_count, scheduler.report_count)
+    log.info("stopped: sessions=%d reports=%d", scheduler.session_count, scheduler.report_count)
 
     failures = []
     # cycle_period=10s, collect=5s, total run 20s. Both 2 and 3 sessions

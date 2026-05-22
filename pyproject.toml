@@ -41,6 +41,7 @@ dev = [
 
 [project.scripts]
 ai-edge-visualizer = "visualizer.__main__:main"
+ai-edge-monitor = "cli.__main__:main"
 
 [project.urls]
 Documentation = "docs/prd/README.md"
@@ -58,6 +59,8 @@ include = [
     "power_monitor*",
     "runtime_guardian*",
     "scenarios*",
+    "storage_exporter*",
+    "cli*",
     "scheduler*",
     "visualizer*",
 ]
@@ -94,6 +97,8 @@ known_first_party = [
     "power_monitor",
     "runtime_guardian",
     "scenarios",
+    "storage_exporter",
+    "cli",
     "scheduler",
     "visualizer",
 ]

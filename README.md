@@ -4,6 +4,35 @@
 
 `ai-edge-monitor` 把"采集 → 分析 → 报告"打通成一条独立、低开销、可旁路降级的链路：每个模块都自带基线测试与集成测试，关键路径在开发机上 30s × 100ms 空跑的 CPU 增量 < 0.05ms、RSS 增量 < 0.05MB。
 
+## Quick Demo
+
+```bash
+pip install -e .
+ai-edge-monitor run --duration 30
+```
+
+默认输出到 `reports/demo/`：
+
+```text
+reports/demo/
+├── metrics.jsonl   # 逐行 JSON 指标，适合日志管线和后处理
+├── metrics.csv     # 表格化指标，适合 Excel / pandas 快速查看
+├── summary.json    # 聚合分析结果，供报告和自动化检查复用
+└── report.png      # 可视化报告；旁边同步生成 report.png.json sidecar
+```
+
+无真实硬件数据源时会自动降级到 dummy 源；也可以显式使用：
+
+```bash
+ai-edge-monitor run --duration 30 --force-dummy --out reports/demo
+```
+
+合成场景报告可用下面命令生成，示例报告路径为 `docs/test_report/scenarios/report_inference.png`：
+
+```bash
+ai-edge-monitor scenario --duration 60 --out docs/test_report/scenarios
+```
+
 ## 核心特性
 
 - **双路采集**：通用指标（CPU/内存/温度/GPU）走 `platform_adapter`，板级功耗走独立的 `power_monitor`，两路独立降频/熔断、互不阻塞
@@ -149,13 +178,14 @@ python -m visualizer --input summary.json --output report.png
 +------------------------+--------+-------------------+----------------+-------------------+
 | Module                 | Status | Baseline test     | Integration    | PRD               |
 +------------------------+--------+-------------------+----------------+-------------------+
+| cli                    |   ✅   | -                 | cli_run        | -                 |
 | config_manager         |   ⚪   | -                 | -              | docs/prd          |
 | platform_adapter       |   ✅   | PASS (0.04 MB)    | adapter→coll   | docs/prd          |
 | metrics_collector      |   ✅   | PASS (0.29 MB)    | coll→analyzer  | docs/prd          |
 | power_monitor          |   ✅   | PASS (0.03 MB)    | power→analyzer | docs/prd/detailed |
 | sampler_scheduler      |   ✅   | PASS (0.05 MB)    | scheduler→rep  | docs/prd          |
 | aggregator_analyzer    |   ✅   | PASS (0.11 MB)    | e2e            | docs/prd          |
-| storage_exporter       |   ⚪   | -                 | -              | docs/prd          |
+| storage_exporter       |   ✅   | unittest          | cli_run        | docs/prd          |
 | visualization          |   ✅   | -                 | e2e            | docs/prd          |
 | runtime_guardian       |   ✅   | PASS (0.04 MB)    | full_system    | docs/prd          |
 | app_orchestrator       |   ⚪   | -                 | -              | docs/prd          |
@@ -174,6 +204,8 @@ ai-embedded-hw-monitoring/
 ├── .github/workflows/
 │   └── test.yml                    # CI: lint + matrix py3.8/3.10/3.12
 ├── src/
+│   ├── cli/                        # ai-edge-monitor 主 CLI
+│   │   └── __main__.py             # run / report / scenario 子命令
 │   ├── platform_adapter/           # CPU/mem/temp 探针 + 采样器
 │   │   ├── probe.py                # PlatformProbe ABC + DummyProbe
 │   │   ├── procfs_probe.py         # /proc/stat + /proc/meminfo + thermal
@@ -191,6 +223,8 @@ ai-embedded-hw-monitoring/
 │   │   └── guardian.py             # RuntimeGuardian + GuardianConfig
 │   ├── aggregator_analyzer/        # 跨源聚合
 │   │   └── analyzer.py             # AggregatorAnalyzer + WindowSummary
+│   ├── storage_exporter/           # JSONL / CSV / summary.json 导出
+│   │   └── __init__.py             # JsonlExporter / CsvExporter / SummaryExporter
 │   ├── visualizer/                 # 报告渲染
 │   │   ├── report.py               # plot_report (matplotlib + stdlib 双后端)
 │   │   └── __main__.py             # CLI: python -m visualizer
@@ -232,7 +266,7 @@ ai-embedded-hw-monitoring/
 2. **tests** (Python 3.8 / 3.10 / 3.12 矩阵):
    - `tests/*/test_baseline.py` 6 个基线（每个 ~30-60s）
    - `tests/test_power_acceptance.py` (`unittest`)
-   - 6 个 `integration/test_*.py`（含 `test_full_system.py` 60s 金本位）
+   - 7 个 `integration/test_*.py`（含 `test_full_system.py` 60s 金本位和 `test_cli_run.py` CLI 闭环）
    - `examples/generate_report.py`
 3. **artifacts**: PNG 报告 + JSON sidecar 上传，保留 14 天
 

@@ -34,7 +34,16 @@ class CliReportTests(unittest.TestCase):
             output = root / "report.png"
 
             proc = subprocess.run(
-                [sys.executable, "-m", "cli", "report", "--input", str(summary), "--out", str(output)],
+                [
+                    sys.executable,
+                    "-m",
+                    "cli",
+                    "report",
+                    "--input",
+                    str(summary),
+                    "--out",
+                    str(output),
+                ],
                 text=True,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
@@ -52,7 +61,16 @@ class CliReportTests(unittest.TestCase):
             output = Path(tmp) / "report.png"
 
             proc = subprocess.run(
-                [sys.executable, "-m", "cli", "report", "--input", str(missing), "--out", str(output)],
+                [
+                    sys.executable,
+                    "-m",
+                    "cli",
+                    "report",
+                    "--input",
+                    str(missing),
+                    "--out",
+                    str(output),
+                ],
                 text=True,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,

@@ -54,14 +54,16 @@ package-dir = { "" = "src" }
 where = ["src"]
 include = [
     "aggregator_analyzer*",
+    "app_orchestrator*",
+    "cli*",
     "collector*",
+    "config_manager*",
     "platform_adapter*",
     "power_monitor*",
     "runtime_guardian*",
     "scenarios*",
-    "storage_exporter*",
-    "cli*",
     "scheduler*",
+    "storage_exporter*",
     "visualizer*",
 ]
 exclude = ["__pycache__*"]
@@ -92,14 +94,16 @@ line_length = 100
 src_paths = ["src", "tests", "integration", "examples", "tools"]
 known_first_party = [
     "aggregator_analyzer",
+    "app_orchestrator",
+    "cli",
     "collector",
+    "config_manager",
     "platform_adapter",
     "power_monitor",
     "runtime_guardian",
     "scenarios",
-    "storage_exporter",
-    "cli",
     "scheduler",
+    "storage_exporter",
     "visualizer",
 ]
 

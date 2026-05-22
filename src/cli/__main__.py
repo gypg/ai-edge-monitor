@@ -5,12 +5,12 @@ import json
 import sys
 import time
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, Dict, List, Optional
 
 from aggregator_analyzer import AggregatorAnalyzer
-from collector import Collector, CollectorConfig
+from app_orchestrator import Orchestrator
+from config_manager import load_config
 from scenarios import make_scenario
-from storage_exporter import CsvExporter, JsonlExporter, SummaryExporter
 from visualizer import plot_report
 
 DEFAULT_DURATION_SEC = 30
@@ -57,52 +57,21 @@ def _build_parser() -> argparse.ArgumentParser:
 
 
 def _run_command(args: argparse.Namespace) -> int:
-    config = _load_config(args.config)
-    duration_sec = int(_pick(args.duration, config.get("duration_sec"), DEFAULT_DURATION_SEC))
-    interval_ms = int(_pick(args.interval, config.get("interval_ms"), DEFAULT_INTERVAL_MS))
-    output_dir = Path(str(_pick(args.out, config.get("output_dir"), DEFAULT_OUTPUT_DIR)))
-    force_dummy = bool(args.force_dummy or config.get("force_dummy", False))
-
-    if duration_sec <= 0:
-        raise ValueError("--duration must be > 0")
-    if interval_ms <= 0:
-        raise ValueError("--interval must be > 0")
-
-    analyzer = AggregatorAnalyzer(window_sec=max(120, duration_sec * 4))
-    collector = Collector(
-        CollectorConfig(
-            interval_ms=interval_ms,
-            force_dummy=force_dummy,
-            power_window_size=max(8, duration_sec),
-        ),
-        analyzer=analyzer,
+    config = load_config(
+        args.config,
+        overrides={
+            "duration_sec": args.duration,
+            "interval_ms": args.interval,
+            "output_dir": args.out,
+            "force_dummy": True if args.force_dummy else None,
+        },
     )
-
-    print(
-        "starting monitor session: "
-        f"duration={duration_sec}s interval={interval_ms}ms out={output_dir} "
-        f"probe={collector.probe_name} power={collector.power_source_name}"
-    )
-    collector.start()
-    try:
-        time.sleep(duration_sec)
-    finally:
-        collector.stop()
-
-    summary = analyzer.get_summary_dict()
-    session_stats = collector.get_session_stats()
-    summary.update(session_stats)
-
-    metric_rows = _summary_to_metric_rows(summary)
-    JsonlExporter(output_dir).write_metrics(metric_rows)
-    CsvExporter(output_dir).write_metrics(metric_rows)
-    SummaryExporter(output_dir).write_summary(summary)
-    report_path = plot_report(summary, output_dir / "report.png")
-
+    result = Orchestrator(config).run()
     print(
         "monitor session complete: "
-        f"metrics={summary['sample_count_metrics']} power={summary['sample_count_power']} "
-        f"report={report_path}"
+        f"metrics={result.metrics_count} power={result.power_count} "
+        f"probe={result.probe_name} power_source={result.power_source_name} "
+        f"report={result.report_png}"
     )
     return 0
 
@@ -131,11 +100,13 @@ def _scenario_command(args: argparse.Namespace) -> int:
     return 0
 
 
-def _run_scenario(name: str, duration_sec: int, interval_ms: int, output_dir: Path) -> Dict[str, Any]:
-    from platform_adapter import DummyProbe
-    from power_monitor import DummySource, PowerSampler, PowerStats
-    from platform_adapter import PlatformSampler
+def _run_scenario(
+    name: str, duration_sec: int, interval_ms: int, output_dir: Path
+) -> Dict[str, Any]:
     import threading
+
+    from platform_adapter import DummyProbe, PlatformSampler
+    from power_monitor import DummySource, PowerSampler, PowerStats
 
     scenario = make_scenario(name, seed=42)
     analyzer = AggregatorAnalyzer(window_sec=max(180, duration_sec * 4))
@@ -179,57 +150,6 @@ def _run_scenario(name: str, duration_sec: int, interval_ms: int, output_dir: Pa
         "energy_joule": summary["energy_joule"],
         "report_path": str(report_path),
     }
-
-
-def _summary_to_metric_rows(summary: Dict[str, Any]) -> List[Dict[str, Any]]:
-    ts_values = list(summary.get("timeline_ts_ms") or [])
-    cpu_values = list(summary.get("timeline_cpu") or [])
-    mem_values = list(summary.get("timeline_mem_used_mb") or [])
-    power_ts_values = list(summary.get("timeline_power_ts_ms") or [])
-    power_values = list(summary.get("timeline_power_watt") or [])
-    rows: List[Dict[str, Any]] = []
-    count = max(len(ts_values), len(power_ts_values))
-    for i in range(count):
-        rows.append(
-            {
-                "ts_ms": _at(ts_values, i),
-                "cpu_percent": _at(cpu_values, i),
-                "mem_used_mb": _at(mem_values, i),
-                "power_ts_ms": _at(power_ts_values, i),
-                "avg_power_watt": _at(power_values, i),
-                "probe_name": summary.get("probe_name"),
-                "power_source_name": summary.get("power_source_name"),
-            }
-        )
-    return rows
-
-
-def _at(values: List[Any], index: int) -> Any:
-    if index >= len(values):
-        return None
-    return values[index]
-
-
-def _load_config(path: Optional[str]) -> Dict[str, Any]:
-    if not path:
-        return {}
-    config_path = Path(path)
-    if not config_path.is_file():
-        raise FileNotFoundError(f"config file not found: {config_path}")
-    if config_path.suffix.lower() not in (".json", ""):
-        raise ValueError("--config currently supports JSON files")
-    loaded = json.loads(config_path.read_text(encoding="utf-8"))
-    if not isinstance(loaded, dict):
-        raise ValueError("config file must contain a JSON object")
-    return loaded
-
-
-def _pick(cli_value: Any, config_value: Any, default: Any) -> Any:
-    if cli_value is not None:
-        return cli_value
-    if config_value is not None:
-        return config_value
-    return default
 
 
 if __name__ == "__main__":

@@ -11,6 +11,29 @@ pip install -e .
 ai-edge-monitor run --duration 30
 ```
 
+也可以用 YAML 配置文件运行：
+
+```yaml
+# monitor.yaml
+duration_sec: 30
+interval_ms: 1000
+output_dir: reports/demo
+device: auto
+force_dummy: false
+exporters:
+  - jsonl
+  - csv
+  - summary
+  - png
+thresholds:
+  cpu_high: 85
+  temp_high: 80
+```
+
+```bash
+ai-edge-monitor run --config monitor.yaml
+```
+
 默认输出到 `reports/demo/`：
 
 ```text
@@ -36,10 +59,11 @@ ai-edge-monitor scenario --duration 60 --out docs/test_report/scenarios
 ## 核心特性
 
 - **双路采集**：通用指标（CPU/内存/温度/GPU）走 `platform_adapter`，板级功耗走独立的 `power_monitor`，两路独立降频/熔断、互不阻塞
-- **跨平台探测链**：`procfs → psutil → dummy` 自动选源；`sysfs power_supply → dummy` 同理；缺源时打 WARNING 而非崩溃
+- **跨平台探测链**：`nvidia-smi → procfs → psutil → dummy` 自动选源；`sysfs power_supply → dummy` 同理；缺源时打 WARNING 而非崩溃
 - **非忙等定时**：所有采样器统一用 `time.monotonic()` + `sleep` 漂移补偿，绝不 spin
 - **聚合层无重算**：`aggregator_analyzer` 直接消费 `PowerStatsFrame`，不重做窗口统计，避免与 `power_monitor` 双向漂移
 - **零依赖回退**：`visualizer` 在没有 matplotlib 时用 stdlib `zlib` + 手写 PNG chunk 渲染合法报告 + JSON sidecar，CI 不需要装图形库
+- **配置驱动编排**：`config_manager` 支持 YAML 默认值/文件/CLI 覆盖，`app_orchestrator` 统一装配采集、分析、导出和报告
 - **场景驱动**：`src/scenarios/` 提供 idle / inference / throttled 三种合成负载，无真机也能预演分析能力
 
 ## 架构
@@ -47,7 +71,7 @@ ai-edge-monitor scenario --duration 60 --out docs/test_report/scenarios
 ```mermaid
 flowchart LR
     subgraph Adapter[platform_adapter]
-        Probe[ProcfsProbe / PsutilProbe / DummyProbe]
+        Probe[NvidiaSmiProbe / ProcfsProbe / PsutilProbe / DummyProbe]
         PSampler[PlatformSampler]
         Probe -->|RawMetrics| PSampler
     end
@@ -179,8 +203,8 @@ python -m visualizer --input summary.json --output report.png
 | Module                 | Status | Baseline test     | Integration    | PRD               |
 +------------------------+--------+-------------------+----------------+-------------------+
 | cli                    |   ✅   | -                 | cli_run        | -                 |
-| config_manager         |   ⚪   | -                 | -              | docs/prd          |
-| platform_adapter       |   ✅   | PASS (0.04 MB)    | adapter→coll   | docs/prd          |
+| config_manager         |   ✅   | unittest          | cli_run        | docs/prd          |
+| platform_adapter       |   ✅   | PASS (0.04 MB)    | adapter→coll   | docs/prd + nvidia |
 | metrics_collector      |   ✅   | PASS (0.29 MB)    | coll→analyzer  | docs/prd          |
 | power_monitor          |   ✅   | PASS (0.03 MB)    | power→analyzer | docs/prd/detailed |
 | sampler_scheduler      |   ✅   | PASS (0.05 MB)    | scheduler→rep  | docs/prd          |
@@ -188,7 +212,7 @@ python -m visualizer --input summary.json --output report.png
 | storage_exporter       |   ✅   | unittest          | cli_run        | docs/prd          |
 | visualization          |   ✅   | -                 | e2e            | docs/prd          |
 | runtime_guardian       |   ✅   | PASS (0.04 MB)    | full_system    | docs/prd          |
-| app_orchestrator       |   ⚪   | -                 | -              | docs/prd          |
+| app_orchestrator       |   ✅   | unittest          | cli_run        | docs/prd          |
 | scenarios (合成负载)   |   ✅   | -                 | examples       | -                 |
 +------------------------+--------+-------------------+----------------+-------------------+
 ```
@@ -206,10 +230,15 @@ ai-embedded-hw-monitoring/
 ├── src/
 │   ├── cli/                        # ai-edge-monitor 主 CLI
 │   │   └── __main__.py             # run / report / scenario 子命令
-│   ├── platform_adapter/           # CPU/mem/temp 探针 + 采样器
+│   ├── config_manager/             # YAML 配置 + CLI 覆盖合并
+│   │   └── config.py               # MonitorConfig / load_config
+│   ├── app_orchestrator/           # 采集→分析→导出→报告编排
+│   │   └── orchestrator.py         # Orchestrator + MonitoringResult
+│   ├── platform_adapter/           # CPU/mem/temp/GPU 探针 + 采样器
 │   │   ├── probe.py                # PlatformProbe ABC + DummyProbe
 │   │   ├── procfs_probe.py         # /proc/stat + /proc/meminfo + thermal
 │   │   ├── psutil_probe.py         # psutil 跨平台回退
+│   │   ├── nvidia_smi_probe.py     # nvidia-smi GPU 利用率/显存/温度
 │   │   └── sampler.py              # PlatformSampler (monotonic + sleep)
 │   ├── power_monitor/              # 功耗采集 + 滑窗统计
 │   │   ├── source.py               # PowerSource ABC + SysfsPowerSource + DummySource

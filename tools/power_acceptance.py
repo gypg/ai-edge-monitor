@@ -53,13 +53,13 @@ Quality = Literal["raw", "derived", "estimated", "unavailable"]
 ReadStatus = Literal["ok", "timeout", "io_error", "parse_error", "not_supported"]
 
 
-@dataclass(slots=True)
+@dataclass
 class PowerConfig:
     sample_interval_ms: int = 1000
     read_timeout_ms: int = 50
 
 
-@dataclass(slots=True)
+@dataclass
 class PowerReading:
     ts_ms: int
     power_watt: Optional[float]
@@ -72,7 +72,7 @@ class PowerReading:
     error_message: Optional[str] = None
 
 
-@dataclass(slots=True)
+@dataclass
 class PowerSample:
     reading: PowerReading
     seq: int

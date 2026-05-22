@@ -56,11 +56,17 @@ class ConfigManagerTests(unittest.TestCase):
     def test_cli_overrides_file_values(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "monitor.yaml"
-            path.write_text("duration_sec: 12\ninterval_ms: 250\nforce_dummy: false\n", encoding="utf-8")
+            path.write_text(
+                "duration_sec: 12\ninterval_ms: 250\nforce_dummy: false\n", encoding="utf-8"
+            )
 
             config = load_config(
                 path,
-                overrides={"duration_sec": 5, "output_dir": "reports/override", "force_dummy": True},
+                overrides={
+                    "duration_sec": 5,
+                    "output_dir": "reports/override",
+                    "force_dummy": True,
+                },
             )
 
             self.assertEqual(config.duration_sec, 5)

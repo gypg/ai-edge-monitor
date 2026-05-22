@@ -127,7 +127,9 @@ def _parse_yaml(text: str) -> Dict[str, Any]:
             key, value = stripped.split(":", 1)
             data[current_key][key.strip()] = _parse_scalar(value.strip())
         else:
-            raise ConfigError(f"invalid YAML at line {line_no}: nested values not supported for {current_key}")
+            raise ConfigError(
+                f"invalid YAML at line {line_no}: nested values not supported for {current_key}"
+            )
     return data
 
 

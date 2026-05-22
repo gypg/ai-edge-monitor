@@ -23,7 +23,12 @@ class OrchestratorTests(unittest.TestCase):
 
             self.assertGreaterEqual(result.metrics_count, 2)
             self.assertGreaterEqual(result.power_count, 2)
-            for path in (result.metrics_jsonl, result.metrics_csv, result.summary_json, result.report_png):
+            for path in (
+                result.metrics_jsonl,
+                result.metrics_csv,
+                result.summary_json,
+                result.report_png,
+            ):
                 self.assertTrue(path.is_file(), f"missing {path}")
                 self.assertGreater(path.stat().st_size, 0, f"empty {path}")
             summary = json.loads(result.summary_json.read_text(encoding="utf-8"))
@@ -34,7 +39,9 @@ class OrchestratorTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             file_path = Path(tmp) / "not_a_dir"
             file_path.write_text("occupied", encoding="utf-8")
-            config = MonitorConfig(duration_sec=1, interval_ms=500, output_dir=str(file_path), force_dummy=True)
+            config = MonitorConfig(
+                duration_sec=1, interval_ms=500, output_dir=str(file_path), force_dummy=True
+            )
 
             with self.assertRaisesRegex(ConfigError, "output path is not a directory"):
                 Orchestrator(config).run()

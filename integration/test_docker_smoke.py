@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -31,11 +32,11 @@ def main() -> int:
     with tempfile.TemporaryDirectory() as tmp:
         out_dir = Path(tmp) / "reports"
         out_dir.mkdir()
-        run = subprocess.run(
+        docker_run = ["docker", "run", "--rm"]
+        if hasattr(os, "getuid") and hasattr(os, "getgid"):
+            docker_run.extend(["--user", f"{os.getuid()}:{os.getgid()}"])
+        docker_run.extend(
             [
-                "docker",
-                "run",
-                "--rm",
                 "-v",
                 f"{out_dir}:/out",
                 IMAGE,
@@ -48,7 +49,10 @@ def main() -> int:
                 "--out",
                 "/out/demo",
                 "--force-dummy",
-            ],
+            ]
+        )
+        run = subprocess.run(
+            docker_run,
             text=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,

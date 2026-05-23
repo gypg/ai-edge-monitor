@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import urllib.request
 import unittest
+import urllib.request
 
 from prometheus_exporter import PrometheusExporter
 

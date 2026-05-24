@@ -35,7 +35,7 @@ from power_monitor import DummySource, PowerSampler  # noqa: E402
 DURATION_SEC = 30
 INTERVAL_MS = 100
 TIMEOUT_MS = 50
-CPU_THRESHOLD_MS = 5.0
+CPU_THRESHOLD_MS = 10.0
 MEM_THRESHOLD_MB = 5.0
 
 

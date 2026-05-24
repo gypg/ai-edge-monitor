@@ -40,10 +40,7 @@ class OrchestratorTests(unittest.TestCase):
             file_path = Path(tmp) / "not_a_dir"
             file_path.write_text("occupied", encoding="utf-8")
             config = MonitorConfig(
-                duration_sec=1,
-                interval_ms=500,
-                output_dir=str(file_path),
-                force_dummy=True,
+                duration_sec=1, interval_ms=500, output_dir=str(file_path), force_dummy=True
             )
 
             with self.assertRaisesRegex(ConfigError, "output path is not a directory"):

@@ -3,7 +3,7 @@ from __future__ import annotations
 import subprocess
 import time
 from dataclasses import dataclass
-from typing import Callable, List, Sequence
+from typing import Callable, Literal, Optional, Sequence
 
 from .probe import PlatformCaps, PlatformProbe, RawMetrics
 
@@ -21,8 +21,8 @@ class NvidiaSmiMetrics:
 class NvidiaSmiProbe(PlatformProbe):
     name = "nvidia-smi"
 
-    def __init__(self, runner: Runner = None, timeout_sec: float = 2.0) -> None:
-        self._runner = runner or _run_command
+    def __init__(self, runner: Optional[Runner] = None, timeout_sec: float = 2.0) -> None:
+        self._runner = _run_command if runner is None else runner
         self._timeout_sec = timeout_sec
         self._last_error = ""
 
@@ -121,7 +121,12 @@ def _run_command(command: Sequence[str], timeout: float) -> subprocess.Completed
     )
 
 
-def _error_metrics(ts_ms: int, started: float, status: str, message: str) -> RawMetrics:
+def _error_metrics(
+    ts_ms: int,
+    started: float,
+    status: Literal["parse_error", "not_supported"],
+    message: str,
+) -> RawMetrics:
     return RawMetrics(
         ts_ms=ts_ms,
         cpu_percent=0.0,

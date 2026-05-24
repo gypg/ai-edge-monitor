@@ -1,0 +1,8 @@
+services:
+  ai-edge-monitor:
+    build: .
+    image: ai-edge-monitor:local
+    volumes:
+      - ./monitor.yaml:/app/monitor.yaml:ro
+      - ./reports:/app/reports
+    command: ["ai-edge-monitor", "run", "--config", "/app/monitor.yaml", "--force-dummy"]

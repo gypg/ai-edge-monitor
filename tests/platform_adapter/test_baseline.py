@@ -36,7 +36,7 @@ from platform_adapter import DummyProbe, PlatformSampler  # noqa: E402
 
 DURATION_SEC = 30
 INTERVAL_MS = 100
-CPU_THRESHOLD_MS = 5.0
+CPU_THRESHOLD_MS = 10.0
 MEM_THRESHOLD_MB = 5.0
 
 

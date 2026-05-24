@@ -64,6 +64,9 @@ ai-edge-monitor scenario --duration 60 --out docs/test_report/scenarios
 - **聚合层无重算**：`aggregator_analyzer` 直接消费 `PowerStatsFrame`，不重做窗口统计，避免与 `power_monitor` 双向漂移
 - **零依赖回退**：`visualizer` 在没有 matplotlib 时用 stdlib `zlib` + 手写 PNG chunk 渲染合法报告 + JSON sidecar，CI 不需要装图形库
 - **配置驱动编排**：`config_manager` 支持 YAML 默认值/文件/CLI 覆盖，`app_orchestrator` 统一装配采集、分析、导出和报告
+- **Prometheus 指标暴露**：`prometheus_exporter` 可把窗口摘要转成 Prometheus text exposition，并可用 stdlib HTTP server 暴露 `/metrics`
+- **容器化演示**：提供 `Dockerfile` / `docker-compose.yml`，方便隔离环境中跑 dummy 监控闭环
+- **推理负载示例**：`examples/inference_demo.py` 用纯 Python 模拟持续推理负载，可与监控命令并行验证报告效果
 - **场景驱动**：`src/scenarios/` 提供 idle / inference / throttled 三种合成负载，无真机也能预演分析能力
 
 ## 架构
@@ -139,6 +142,48 @@ pre-commit install
 | `[all]` | psutil + matplotlib | 推荐 |
 | `[dev]` | 全部 + lint 工具 + pre-commit | 贡献者 |
 
+### Docker 运行
+
+```bash
+docker build -t ai-edge-monitor:local .
+mkdir -p reports
+cat > monitor.yaml <<'YAML'
+duration_sec: 30
+interval_ms: 1000
+output_dir: reports/docker_demo
+force_dummy: true
+exporters:
+  - jsonl
+  - csv
+  - summary
+  - png
+thresholds:
+  cpu_high: 85
+  temp_high: 80
+YAML
+docker compose up --build ai-edge-monitor
+```
+
+### 结合推理 workload 运行
+
+一个终端启动监控：
+
+```bash
+ai-edge-monitor run --duration 20 --out reports/inference_demo
+```
+
+另一个终端运行轻量推理负载：
+
+```bash
+python examples/inference_demo.py --duration-sec 20 --size 64
+```
+
+也可以生成合成推理场景报告：
+
+```bash
+ai-edge-monitor scenario --scenario inference --duration 60 --out docs/test_report/scenarios
+```
+
 ### 运行端到端测试
 
 ```bash
@@ -210,6 +255,7 @@ python -m visualizer --input summary.json --output report.png
 | sampler_scheduler      |   ✅   | PASS (0.05 MB)    | scheduler→rep  | docs/prd          |
 | aggregator_analyzer    |   ✅   | PASS (0.11 MB)    | e2e            | docs/prd          |
 | storage_exporter       |   ✅   | unittest          | cli_run        | docs/prd          |
+| prometheus_exporter    |   ✅   | unittest          | -              | -                 |
 | visualization          |   ✅   | -                 | e2e            | docs/prd          |
 | runtime_guardian       |   ✅   | PASS (0.04 MB)    | full_system    | docs/prd          |
 | app_orchestrator       |   ✅   | unittest          | cli_run        | docs/prd          |
@@ -223,6 +269,9 @@ baseline 列的 MB 值是 30 秒 × 100ms 空跑的 RSS 增量上限实测（开
 
 ```
 ai-embedded-hw-monitoring/
+├── Dockerfile                       # 容器化 demo 镜像
+├── docker-compose.yml               # dummy 监控会话 compose 示例
+├── .dockerignore                    # Docker 构建上下文排除
 ├── pyproject.toml                  # 包配置 + black/isort/mypy 配置
 ├── .pre-commit-config.yaml         # pre-commit 钩子
 ├── .github/workflows/
@@ -254,6 +303,9 @@ ai-embedded-hw-monitoring/
 │   │   └── analyzer.py             # AggregatorAnalyzer + WindowSummary
 │   ├── storage_exporter/           # JSONL / CSV / summary.json 导出
 │   │   └── __init__.py             # JsonlExporter / CsvExporter / SummaryExporter
+│   ├── prometheus_exporter/        # Prometheus text exposition + /metrics
+│   │   ├── exporter.py             # PrometheusExporter
+│   │   └── __init__.py
 │   ├── visualizer/                 # 报告渲染
 │   │   ├── report.py               # plot_report (matplotlib + stdlib 双后端)
 │   │   └── __main__.py             # CLI: python -m visualizer
@@ -275,7 +327,8 @@ ai-embedded-hw-monitoring/
 │   └── test_full_system.py            # 金本位: collector+scheduler+guardian
 ├── examples/
 │   ├── generate_report.py          # 合成数据 → 示例报告
-│   └── generate_scenario_reports.py
+│   ├── generate_scenario_reports.py
+│   └── inference_demo.py           # 轻量推理负载示例
 ├── tools/
 │   └── power_acceptance.py         # 12 分钟真机验收脚本
 └── docs/
@@ -283,6 +336,7 @@ ai-embedded-hw-monitoring/
     ├── changelog/                  # 模块变更说明
     └── test_report/
         ├── real_hardware_validation.md   # 验收报告 + 真机操作手册
+        ├── validation_template_jetson_rpi.md # Jetson/RPi 真机验收模板
         ├── artifacts/                    # e2e 30s 产物
         └── scenarios/                    # idle/inference/throttled 报告
 ```

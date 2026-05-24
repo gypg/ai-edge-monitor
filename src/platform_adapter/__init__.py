@@ -18,6 +18,7 @@ from __future__ import annotations
 
 from typing import List, Tuple
 
+from .nvidia_smi_probe import NvidiaSmiProbe
 from .probe import DummyProbe, PlatformCaps, PlatformProbe, RawMetrics
 from .procfs_probe import ProcfsProbe
 from .psutil_probe import PsutilProbe
@@ -28,7 +29,9 @@ def select_default_probe(prefer: Tuple[str, ...] = ("procfs", "psutil")) -> Plat
     """Return the first available probe from `prefer`, falling back to DummyProbe."""
     candidates: List[PlatformProbe] = []
     for name in prefer:
-        if name == "procfs":
+        if name == "nvidia-smi":
+            candidates.append(NvidiaSmiProbe())
+        elif name == "procfs":
             candidates.append(ProcfsProbe())
         elif name == "psutil":
             candidates.append(PsutilProbe())
@@ -44,6 +47,7 @@ __all__ = [
     "PlatformCaps",
     "RawMetrics",
     "DummyProbe",
+    "NvidiaSmiProbe",
     "ProcfsProbe",
     "PsutilProbe",
     "PlatformSampler",

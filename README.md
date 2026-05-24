@@ -4,13 +4,66 @@
 
 `ai-edge-monitor` 把"采集 → 分析 → 报告"打通成一条独立、低开销、可旁路降级的链路：每个模块都自带基线测试与集成测试，关键路径在开发机上 30s × 100ms 空跑的 CPU 增量 < 0.05ms、RSS 增量 < 0.05MB。
 
+## Quick Demo
+
+```bash
+pip install -e .
+ai-edge-monitor run --duration 30
+```
+
+也可以用 YAML 配置文件运行：
+
+```yaml
+# monitor.yaml
+duration_sec: 30
+interval_ms: 1000
+output_dir: reports/demo
+device: auto
+force_dummy: false
+exporters:
+  - jsonl
+  - csv
+  - summary
+  - png
+thresholds:
+  cpu_high: 85
+  temp_high: 80
+```
+
+```bash
+ai-edge-monitor run --config monitor.yaml
+```
+
+默认输出到 `reports/demo/`：
+
+```text
+reports/demo/
+├── metrics.jsonl   # 逐行 JSON 指标，适合日志管线和后处理
+├── metrics.csv     # 表格化指标，适合 Excel / pandas 快速查看
+├── summary.json    # 聚合分析结果，供报告和自动化检查复用
+└── report.png      # 可视化报告；旁边同步生成 report.png.json sidecar
+```
+
+无真实硬件数据源时会自动降级到 dummy 源；也可以显式使用：
+
+```bash
+ai-edge-monitor run --duration 30 --force-dummy --out reports/demo
+```
+
+合成场景报告可用下面命令生成，示例报告路径为 `docs/test_report/scenarios/report_inference.png`：
+
+```bash
+ai-edge-monitor scenario --duration 60 --out docs/test_report/scenarios
+```
+
 ## 核心特性
 
 - **双路采集**：通用指标（CPU/内存/温度/GPU）走 `platform_adapter`，板级功耗走独立的 `power_monitor`，两路独立降频/熔断、互不阻塞
-- **跨平台探测链**：`procfs → psutil → dummy` 自动选源；`sysfs power_supply → dummy` 同理；缺源时打 WARNING 而非崩溃
+- **跨平台探测链**：`nvidia-smi → procfs → psutil → dummy` 自动选源；`sysfs power_supply → dummy` 同理；缺源时打 WARNING 而非崩溃
 - **非忙等定时**：所有采样器统一用 `time.monotonic()` + `sleep` 漂移补偿，绝不 spin
 - **聚合层无重算**：`aggregator_analyzer` 直接消费 `PowerStatsFrame`，不重做窗口统计，避免与 `power_monitor` 双向漂移
 - **零依赖回退**：`visualizer` 在没有 matplotlib 时用 stdlib `zlib` + 手写 PNG chunk 渲染合法报告 + JSON sidecar，CI 不需要装图形库
+- **配置驱动编排**：`config_manager` 支持 YAML 默认值/文件/CLI 覆盖，`app_orchestrator` 统一装配采集、分析、导出和报告
 - **场景驱动**：`src/scenarios/` 提供 idle / inference / throttled 三种合成负载，无真机也能预演分析能力
 
 ## 架构
@@ -18,7 +71,7 @@
 ```mermaid
 flowchart LR
     subgraph Adapter[platform_adapter]
-        Probe[ProcfsProbe / PsutilProbe / DummyProbe]
+        Probe[NvidiaSmiProbe / ProcfsProbe / PsutilProbe / DummyProbe]
         PSampler[PlatformSampler]
         Probe -->|RawMetrics| PSampler
     end
@@ -149,16 +202,17 @@ python -m visualizer --input summary.json --output report.png
 +------------------------+--------+-------------------+----------------+-------------------+
 | Module                 | Status | Baseline test     | Integration    | PRD               |
 +------------------------+--------+-------------------+----------------+-------------------+
-| config_manager         |   ⚪   | -                 | -              | docs/prd          |
-| platform_adapter       |   ✅   | PASS (0.04 MB)    | adapter→coll   | docs/prd          |
+| cli                    |   ✅   | -                 | cli_run        | -                 |
+| config_manager         |   ✅   | unittest          | cli_run        | docs/prd          |
+| platform_adapter       |   ✅   | PASS (0.04 MB)    | adapter→coll   | docs/prd + nvidia |
 | metrics_collector      |   ✅   | PASS (0.29 MB)    | coll→analyzer  | docs/prd          |
 | power_monitor          |   ✅   | PASS (0.03 MB)    | power→analyzer | docs/prd/detailed |
 | sampler_scheduler      |   ✅   | PASS (0.05 MB)    | scheduler→rep  | docs/prd          |
 | aggregator_analyzer    |   ✅   | PASS (0.11 MB)    | e2e            | docs/prd          |
-| storage_exporter       |   ⚪   | -                 | -              | docs/prd          |
+| storage_exporter       |   ✅   | unittest          | cli_run        | docs/prd          |
 | visualization          |   ✅   | -                 | e2e            | docs/prd          |
 | runtime_guardian       |   ✅   | PASS (0.04 MB)    | full_system    | docs/prd          |
-| app_orchestrator       |   ⚪   | -                 | -              | docs/prd          |
+| app_orchestrator       |   ✅   | unittest          | cli_run        | docs/prd          |
 | scenarios (合成负载)   |   ✅   | -                 | examples       | -                 |
 +------------------------+--------+-------------------+----------------+-------------------+
 ```
@@ -174,10 +228,17 @@ ai-embedded-hw-monitoring/
 ├── .github/workflows/
 │   └── test.yml                    # CI: lint + matrix py3.8/3.10/3.12
 ├── src/
-│   ├── platform_adapter/           # CPU/mem/temp 探针 + 采样器
+│   ├── cli/                        # ai-edge-monitor 主 CLI
+│   │   └── __main__.py             # run / report / scenario 子命令
+│   ├── config_manager/             # YAML 配置 + CLI 覆盖合并
+│   │   └── config.py               # MonitorConfig / load_config
+│   ├── app_orchestrator/           # 采集→分析→导出→报告编排
+│   │   └── orchestrator.py         # Orchestrator + MonitoringResult
+│   ├── platform_adapter/           # CPU/mem/temp/GPU 探针 + 采样器
 │   │   ├── probe.py                # PlatformProbe ABC + DummyProbe
 │   │   ├── procfs_probe.py         # /proc/stat + /proc/meminfo + thermal
 │   │   ├── psutil_probe.py         # psutil 跨平台回退
+│   │   ├── nvidia_smi_probe.py     # nvidia-smi GPU 利用率/显存/温度
 │   │   └── sampler.py              # PlatformSampler (monotonic + sleep)
 │   ├── power_monitor/              # 功耗采集 + 滑窗统计
 │   │   ├── source.py               # PowerSource ABC + SysfsPowerSource + DummySource
@@ -191,6 +252,8 @@ ai-embedded-hw-monitoring/
 │   │   └── guardian.py             # RuntimeGuardian + GuardianConfig
 │   ├── aggregator_analyzer/        # 跨源聚合
 │   │   └── analyzer.py             # AggregatorAnalyzer + WindowSummary
+│   ├── storage_exporter/           # JSONL / CSV / summary.json 导出
+│   │   └── __init__.py             # JsonlExporter / CsvExporter / SummaryExporter
 │   ├── visualizer/                 # 报告渲染
 │   │   ├── report.py               # plot_report (matplotlib + stdlib 双后端)
 │   │   └── __main__.py             # CLI: python -m visualizer
@@ -232,7 +295,7 @@ ai-embedded-hw-monitoring/
 2. **tests** (Python 3.8 / 3.10 / 3.12 矩阵):
    - `tests/*/test_baseline.py` 6 个基线（每个 ~30-60s）
    - `tests/test_power_acceptance.py` (`unittest`)
-   - 6 个 `integration/test_*.py`（含 `test_full_system.py` 60s 金本位）
+   - 7 个 `integration/test_*.py`（含 `test_full_system.py` 60s 金本位和 `test_cli_run.py` CLI 闭环）
    - `examples/generate_report.py`
 3. **artifacts**: PNG 报告 + JSON sidecar 上传，保留 14 天
 

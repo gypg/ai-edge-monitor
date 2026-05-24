@@ -27,4 +27,89 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          BEFORE="${{ github.event.before || '\ }}"\n          if [[ -n "$BEFORE" ]] && git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then\n            pre-commit run --from-ref "$BEFORE" --to-ref HEAD\n          else\n            pre-commit run --all-files\n          fi\n\n  tests:\n    name: tests (Python ${{ matrix.python-version }})\n    runs-on: ubuntu-latest\n    env:\n      AI_EDGE_CI: "1"\n    strategy:\n      fail-fast: false\n      matrix:\n        python-version: ["3.8", "3.10", "3.12"]\n    steps:\n      - uses: actions/checkout@v5\n        with:\n          fetch-depth: 0\n\n      - uses: actions/setup-python@v6\n        with:\n          python-version: ${{ matrix.python-version }}\n          cache: pip\n\n      - name: install project (editable, with optional psutil + matplotlib)\n        run: |\n          python -m pip install --upgrade pip\n          python -m pip install -e ".[all]"\n\n      - name: show selected sources (sysfs / procfs probe availability)\n        run: |\n          python - <<'PY'\n          import os, sys\n          print("sys.platform =", sys.platform)\n          print("/proc/stat readable:", os.path.isfile("/proc/stat"))\n          print("/sys/class/power_supply present:", os.path.isdir("/sys/class/power_supply"))\n          PY\n\n      # ---------- Baselines (all test_*.py under tests/**) ----------\n      - name: run all baseline script tests in tests/**\n        shell: bash\n        run: |\n          set -euo pipefail\n          mapfile -t TEST_FILES < <(find tests -type f -name 'test_*.py' | sort)\n          echo "Found ${#TEST_FILES[@]} tests under tests/**"\n          for f in "${TEST_FILES[@]}"; do\n            echo "===== RUN $f ====="\n            python "$f"\n          done\n\n      # ---------- Integration (all integration/test_*.py) ----------\n      - name: run all integration script tests\n        shell: bash\n        run: |\n          set -euo pipefail\n          mapfile -t INTEG_FILES < <(find integration -maxdepth 1 -type f -name 'test_*.py' | sort)\n          echo "Found ${#INTEG_FILES[@]} integration tests"\n          for f in "${INTEG_FILES[@]}"; do\n            echo "===== RUN $f ====="\n            python "$f"\n          done\n\n      - name: examples — sample report\n        run: python examples/generate_report.py\n\n      # ---------- Artifacts ----------\n      - name: upload reports\n        if: always()\n        uses: actions/upload-artifact@v5\n        with:\n          name: reports-py${{ matrix.python-version }}\n          path: |\n            integration/test_report.png\n            integration/test_report.png.json\n            integration/_*_artifacts/**/*.png\n            integration/_*_artifacts/**/*.png.json\n            docs/test_report/artifacts/*.png\n            docs/test_report/artifacts/*.png.json\n            docs/test_report/scenarios/*.png\n            docs/test_report/scenarios/*.png.json\n            examples/sample_report.png\n            examples/sample_report.png.json\n          if-no-files-found: warn\n          retention-days: 14\n
+          BEFORE="${{ github.event.before || '' }}"
+          if [[ -n "$BEFORE" ]] && git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
+            pre-commit run --from-ref "$BEFORE" --to-ref HEAD
+          else
+            pre-commit run --all-files
+          fi
+
+  tests:
+    name: tests (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    env:
+      AI_EDGE_CI: "1"
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.8", "3.10", "3.12"]
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: install project (editable, with optional psutil + matplotlib)
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[all]"
+
+      - name: show selected sources (sysfs / procfs probe availability)
+        run: |
+          python - <<'PY'
+          import os, sys
+          print("sys.platform =", sys.platform)
+          print("/proc/stat readable:", os.path.isfile("/proc/stat"))
+          print("/sys/class/power_supply present:", os.path.isdir("/sys/class/power_supply"))
+          PY
+
+      # ---------- Baselines (all test_*.py under tests/**) ----------
+      - name: run all baseline script tests in tests/**
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t TEST_FILES < <(find tests -type f -name 'test_*.py' | sort)
+          echo "Found ${#TEST_FILES[@]} tests under tests/**"
+          for f in "${TEST_FILES[@]}"; do
+            echo "===== RUN $f ====="
+            python "$f"
+          done
+
+      # ---------- Integration (all integration/test_*.py) ----------
+      - name: run all integration script tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t INTEG_FILES < <(find integration -maxdepth 1 -type f -name 'test_*.py' | sort)
+          echo "Found ${#INTEG_FILES[@]} integration tests"
+          for f in "${INTEG_FILES[@]}"; do
+            echo "===== RUN $f ====="
+            python "$f"
+          done
+
+      - name: examples — sample report
+        run: python examples/generate_report.py
+
+      # ---------- Artifacts ----------
+      - name: upload reports
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: reports-py${{ matrix.python-version }}
+          path: |
+            integration/test_report.png
+            integration/test_report.png.json
+            integration/_*_artifacts/**/*.png
+            integration/_*_artifacts/**/*.png.json
+            docs/test_report/artifacts/*.png
+            docs/test_report/artifacts/*.png.json
+            docs/test_report/scenarios/*.png
+            docs/test_report/scenarios/*.png.json
+            examples/sample_report.png
+            examples/sample_report.png.json
+          if-no-files-found: warn
+          retention-days: 14

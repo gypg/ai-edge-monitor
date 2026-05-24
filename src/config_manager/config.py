@@ -123,9 +123,7 @@ def _parse_yaml(text: str) -> Dict[str, Any]:
             data[current_key].append(str(_parse_scalar(item)))
         elif current_key == "thresholds":
             if ":" not in stripped:
-                raise ConfigError(
-                    f"invalid YAML at line {line_no}: expected threshold key: value"
-                )
+                raise ConfigError(f"invalid YAML at line {line_no}: expected threshold key: value")
             key, value = stripped.split(":", 1)
             data[current_key][key.strip()] = _parse_scalar(value.strip())
         else:

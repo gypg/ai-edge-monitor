@@ -63,7 +63,11 @@ class ConfigManagerTests(unittest.TestCase):
 
             config = load_config(
                 path,
-                overrides={"duration_sec": 5, "output_dir": "reports/override", "force_dummy": True},
+                overrides={
+                    "duration_sec": 5,
+                    "output_dir": "reports/override",
+                    "force_dummy": True,
+                },
             )
 
             self.assertEqual(config.duration_sec, 5)

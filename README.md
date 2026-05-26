@@ -8,6 +8,32 @@
 
 `ai-edge-monitor` 把"采集 → 分析 → 报告"打通成一条独立、低开销、可旁路降级的链路：每个模块都自带基线测试与集成测试，关键路径在开发机上 30s × 100ms 空跑的 CPU 增量 < 0.05ms、RSS 增量 < 0.05MB。
 
+## 实测输出
+
+在 Windows x86 + NVIDIA GPU 机器上，`CompositeProbe` 自动组合 psutil 与 nvidia-smi，实时读取如下：
+
+```text
+Probe: CompositeProbe
+CPU:  16.3%
+Mem:  26638 / 32668 MB
+GPU:  33.0%
+GPU mem: 2169 MB
+```
+
+无需手动配置，`select_default_probe()` 会自动探测可用数据源并组合：
+- **无 NVIDIA GPU** → `PsutilProbe`（或 `ProcfsProbe` on Linux）
+- **有 NVIDIA GPU** → `CompositeProbe([PsutilProbe, NvidiaSmiProbe])`，CPU/内存与 GPU 指标同时采集
+
+### 采集报告示例
+
+**实时监控（10 秒采集，psutil + nvidia-smi）：**
+
+![实时监控报告](docs/images/demo_realtime.png)
+
+**推理场景（60 秒合成负载）：**
+
+![推理场景报告](docs/images/demo_inference.png)
+
 ## Quick Demo
 
 ```bash
@@ -59,32 +85,6 @@ ai-edge-monitor run --duration 30 --force-dummy --out reports/demo
 ```bash
 ai-edge-monitor scenario --duration 60 --out docs/test_report/scenarios
 ```
-
-## 实测输出
-
-在 Windows x86 + NVIDIA GPU 机器上，`CompositeProbe` 自动组合 psutil 与 nvidia-smi，实时读取如下：
-
-```text
-Probe: CompositeProbe
-CPU:  16.3%
-Mem:  26638 / 32668 MB
-GPU:  33.0%
-GPU mem: 2169 MB
-```
-
-无需手动配置，`select_default_probe()` 会自动探测可用数据源并组合：
-- **无 NVIDIA GPU** → `PsutilProbe`（或 `ProcfsProbe` on Linux）
-- **有 NVIDIA GPU** → `CompositeProbe([PsutilProbe, NvidiaSmiProbe])`，CPU/内存与 GPU 指标同时采集
-
-### 采集报告示例
-
-**实时监控（10 秒采集，psutil + nvidia-smi）：**
-
-![实时监控报告](docs/images/demo_realtime.png)
-
-**推理场景（60 秒合成负载）：**
-
-![推理场景报告](docs/images/demo_inference.png)
 
 ## 核心特性
 

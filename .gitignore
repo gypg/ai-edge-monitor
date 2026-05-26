@@ -39,6 +39,9 @@ node_modules/
 *.log
 *.tmp
 
+# Runtime output
+reports/
+
 # Generated report artifacts (keep docs + templates, ignore generated binaries)
 integration/test_report.png
 integration/test_report.png.json

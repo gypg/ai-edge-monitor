@@ -7,15 +7,12 @@ on:
     branches: ["**"]
   workflow_dispatch:
 
-permissions:
-  contents: read
-
 jobs:
   lint:
     name: pre-commit (black / isort / mypy)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
       - uses: actions/setup-python@v6
@@ -47,7 +44,7 @@ jobs:
       matrix:
         python-version: ["3.8", "3.10", "3.12"]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
 

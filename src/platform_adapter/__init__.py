@@ -16,36 +16,48 @@ Power collection lives in `power_monitor`, not here. See
 
 from __future__ import annotations
 
-from typing import List, Tuple
+from typing import Tuple
 
 from .nvidia_smi_probe import NvidiaSmiProbe
-from .probe import DummyProbe, PlatformCaps, PlatformProbe, RawMetrics
+from .probe import CompositeProbe, DummyProbe, PlatformCaps, PlatformProbe, RawMetrics
 from .procfs_probe import ProcfsProbe
 from .psutil_probe import PsutilProbe
 from .sampler import PlatformSampler
 
 
 def select_default_probe(prefer: Tuple[str, ...] = ("procfs", "psutil")) -> PlatformProbe:
-    """Return the first available probe from `prefer`, falling back to DummyProbe."""
-    candidates: List[PlatformProbe] = []
-    for name in prefer:
-        if name == "nvidia-smi":
-            candidates.append(NvidiaSmiProbe())
-        elif name == "procfs":
-            candidates.append(ProcfsProbe())
-        elif name == "psutil":
-            candidates.append(PsutilProbe())
-        # TODO: register Jetson, NVML, vcgencmd probes here.
+    """Return the best available probe for this host.
+
+    If an nvidia-smi GPU probe is available, it is automatically composed
+    with the primary (CPU / memory) probe so GPU metrics appear alongside
+    CPU / memory readings without requiring manual configuration.
+    """
+    candidates = _resolve_probes(prefer)
+    primary: PlatformProbe = DummyProbe()
     for probe in candidates:
         if probe.is_available():
-            return probe
-    return DummyProbe()
+            primary = probe
+            break
+    gpu = NvidiaSmiProbe()
+    if gpu.is_available():
+        return CompositeProbe([primary, gpu])
+    return primary
+
+
+def _resolve_probes(names: Tuple[str, ...]) -> list:
+    mapping = {
+        "nvidia-smi": NvidiaSmiProbe,
+        "procfs": ProcfsProbe,
+        "psutil": PsutilProbe,
+    }
+    return [mapping[n]() for n in names if n in mapping]
 
 
 __all__ = [
     "PlatformProbe",
     "PlatformCaps",
     "RawMetrics",
+    "CompositeProbe",
     "DummyProbe",
     "NvidiaSmiProbe",
     "ProcfsProbe",

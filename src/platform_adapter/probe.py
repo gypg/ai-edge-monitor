@@ -98,6 +98,101 @@ class _ScenarioLike(Protocol):
     def sample(self) -> object: ...
 
 
+class CompositeProbe(PlatformProbe):
+    """Chain multiple probes together, merging their readings.
+
+    The first probe supplies CPU / memory / temperature; any subsequent
+    probes fill in fields that the primary left as None (e.g. GPU metrics
+    from NvidiaSmiProbe).  ``detect_caps`` merges all capabilities.
+    """
+
+    def __init__(self, probes: list) -> None:
+        if not probes:
+            raise ValueError("CompositeProbe requires at least one probe")
+        self._probes = list(probes)
+        self.name = "+".join(p.name for p in self._probes)
+
+    def is_available(self) -> bool:
+        return any(p.is_available() for p in self._probes)
+
+    def detect_caps(self) -> PlatformCaps:
+        caps = PlatformCaps(platform_name=self.name)
+        for p in self._probes:
+            if not p.is_available():
+                continue
+            c = p.detect_caps()
+            caps.has_cpu = caps.has_cpu or c.has_cpu
+            caps.has_mem = caps.has_mem or c.has_mem
+            caps.has_gpu = caps.has_gpu or c.has_gpu
+            caps.has_temp_sensor = caps.has_temp_sensor or c.has_temp_sensor
+            caps.has_power_sensor = caps.has_power_sensor or c.has_power_sensor
+        return caps
+
+    def read_metrics(self) -> RawMetrics:
+        merged: RawMetrics | None = None
+        total_latency = 0.0
+        errors: list[str] = []
+        for p in self._probes:
+            reading = p.read_metrics()
+            total_latency += reading.latency_ms
+            if merged is None:
+                merged = reading
+            else:
+                merged = _merge_metrics(merged, reading)
+            if reading.error_message:
+                errors.append(reading.error_message)
+        assert merged is not None
+        if errors:
+            merged = RawMetrics(
+                ts_ms=merged.ts_ms,
+                cpu_percent=merged.cpu_percent,
+                mem_used_mb=merged.mem_used_mb,
+                mem_total_mb=merged.mem_total_mb,
+                gpu_percent=merged.gpu_percent,
+                gpu_mem_used_mb=merged.gpu_mem_used_mb,
+                temperature_c=merged.temperature_c,
+                probe_name=self.name,
+                status="partial",
+                latency_ms=total_latency,
+                error_message="; ".join(errors),
+            )
+        else:
+            merged = RawMetrics(
+                ts_ms=merged.ts_ms,
+                cpu_percent=merged.cpu_percent,
+                mem_used_mb=merged.mem_used_mb,
+                mem_total_mb=merged.mem_total_mb,
+                gpu_percent=merged.gpu_percent,
+                gpu_mem_used_mb=merged.gpu_mem_used_mb,
+                temperature_c=merged.temperature_c,
+                probe_name=self.name,
+                status="ok",
+                latency_ms=total_latency,
+            )
+        return merged
+
+
+def _merge_metrics(base: RawMetrics, extra: RawMetrics) -> RawMetrics:
+    """Fill None / 0.0 fields in *base* with values from *extra*."""
+    return RawMetrics(
+        ts_ms=base.ts_ms,
+        cpu_percent=base.cpu_percent if base.cpu_percent else extra.cpu_percent,
+        mem_used_mb=base.mem_used_mb if base.mem_used_mb else extra.mem_used_mb,
+        mem_total_mb=base.mem_total_mb if base.mem_total_mb else extra.mem_total_mb,
+        gpu_percent=base.gpu_percent if base.gpu_percent is not None else extra.gpu_percent,
+        gpu_mem_used_mb=(
+            base.gpu_mem_used_mb if base.gpu_mem_used_mb is not None else extra.gpu_mem_used_mb
+        ),
+        temperature_c=(
+            base.temperature_c if base.temperature_c is not None else extra.temperature_c
+        ),
+        probe_name=base.probe_name,
+        status=base.status,
+        latency_ms=base.latency_ms,
+        error_message=base.error_message,
+    )
+
+
 class DummyProbe(PlatformProbe):
     """Synthetic probe used for tests and development hosts.
 

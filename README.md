@@ -59,7 +59,7 @@ ai-edge-monitor scenario --duration 60 --out docs/test_report/scenarios
 ## 核心特性
 
 - **双路采集**：通用指标（CPU/内存/温度/GPU）走 `platform_adapter`，板级功耗走独立的 `power_monitor`，两路独立降频/熔断、互不阻塞
-- **跨平台探测链**：`nvidia-smi → procfs → psutil → dummy` 自动选源；`sysfs power_supply → dummy` 同理；缺源时打 WARNING 而非崩溃
+- **跨平台探测链**：`nvidia-smi → procfs → psutil → dummy` 自动选源；`sysfs power_supply → dummy` 同理；缺源时打 WARNING 而非崩溃；有 NVIDIA GPU 时自动组合 psutil + nvidia-smi 探测链，CPU/内存和 GPU 指标同时采集
 - **非忙等定时**：所有采样器统一用 `time.monotonic()` + `sleep` 漂移补偿，绝不 spin
 - **聚合层无重算**：`aggregator_analyzer` 直接消费 `PowerStatsFrame`，不重做窗口统计，避免与 `power_monitor` 双向漂移
 - **零依赖回退**：`visualizer` 在没有 matplotlib 时用 stdlib `zlib` + 手写 PNG chunk 渲染合法报告 + JSON sidecar，CI 不需要装图形库
@@ -75,8 +75,10 @@ ai-edge-monitor scenario --duration 60 --out docs/test_report/scenarios
 flowchart LR
     subgraph Adapter[platform_adapter]
         Probe[NvidiaSmiProbe / ProcfsProbe / PsutilProbe / DummyProbe]
+        Composite[CompositeProbe<br/>自动组合多源]
         PSampler[PlatformSampler]
-        Probe -->|RawMetrics| PSampler
+        Probe -->|合并| Composite
+        Composite -->|RawMetrics| PSampler
     end
 
     subgraph Power[power_monitor]
@@ -108,7 +110,7 @@ flowchart LR
     Out[(get_summary_dict)] --> Render
     Render -->|PNG + JSON sidecar| Disk[(report file)]
 
-    Guardian[runtime_guardian<br/>未实现] -.降级/恢复.-> Power
+    Guardian[runtime_guardian<br/>自监控 + 降级/恢复] -.降级/恢复.-> Power
     Guardian -.降级/恢复.-> Adapter
 ```
 
@@ -263,12 +265,12 @@ python -m visualizer --input summary.json --output report.png
 +------------------------+--------+-------------------+----------------+-------------------+
 ```
 
-baseline 列的 MB 值是 30 秒 × 100ms 空跑的 RSS 增量上限实测（开发机 Windows 11 + Python 3.11，无 psutil/matplotlib）。CPU 增量统一在 5ms 阈值之内（详见各 baseline 测试）。`integration/test_full_system.py` 是金本位：60 秒、collector + scheduler + guardian 联动、注入降级与恢复、所有 PNG/sidecar 校验。
+baseline 列的 MB 值是 30 秒 × 100ms 空跑的 RSS 增量上限实测（开发机 Windows + Python 3.12，无 psutil/matplotlib）。CPU 增量统一在 5ms 阈值之内（详见各 baseline 测试）。`integration/test_full_system.py` 是金本位：60 秒、collector + scheduler + guardian 联动、注入降级与恢复、所有 PNG/sidecar 校验。
 
 ## 项目结构
 
 ```
-ai-embedded-hw-monitoring/
+ai-edge-monitor/
 ├── Dockerfile                       # 容器化 demo 镜像
 ├── docker-compose.yml               # dummy 监控会话 compose 示例
 ├── .dockerignore                    # Docker 构建上下文排除

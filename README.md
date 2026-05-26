@@ -1,5 +1,9 @@
 # ai-edge-monitor
 
+![tests](https://github.com/gypg/ai-edge-monitor/actions/workflows/test.yml/badge.svg)
+![Python 3.8+](https://img.shields.io/badge/python-3.8%20%7C%203.10%20%7C%203.12-blue)
+![License](https://img.shields.io/badge/license-Proprietary-orange)
+
 > 面向 Jetson、Raspberry Pi、x86 边缘服务器的轻量级硬件监控管线，专为 AI 推理部署前后的性能评估设计。
 
 `ai-edge-monitor` 把"采集 → 分析 → 报告"打通成一条独立、低开销、可旁路降级的链路：每个模块都自带基线测试与集成测试，关键路径在开发机上 30s × 100ms 空跑的 CPU 增量 < 0.05ms、RSS 增量 < 0.05MB。
@@ -71,6 +75,16 @@ GPU mem: 2169 MB
 无需手动配置，`select_default_probe()` 会自动探测可用数据源并组合：
 - **无 NVIDIA GPU** → `PsutilProbe`（或 `ProcfsProbe` on Linux）
 - **有 NVIDIA GPU** → `CompositeProbe([PsutilProbe, NvidiaSmiProbe])`，CPU/内存与 GPU 指标同时采集
+
+### 采集报告示例
+
+**实时监控（10 秒采集，psutil + nvidia-smi）：**
+
+![实时监控报告](docs/images/demo_realtime.png)
+
+**推理场景（60 秒合成负载）：**
+
+![推理场景报告](docs/images/demo_inference.png)
 
 ## 核心特性
 

@@ -97,7 +97,7 @@ jobs:
       # ---------- Artifacts ----------
       - name: upload reports
         if: always()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: reports-py${{ matrix.python-version }}
           path: |

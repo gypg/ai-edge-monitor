@@ -54,3 +54,6 @@ examples/sample_report.png.json
 
 # Local Claude / agent state
 .claude/
+
+# Local private planning notes
+local/

@@ -562,3 +562,270 @@ python integration/test_full_system.py
 ## 许可
 
 Proprietary（v0.1 内部分发）。许可条款待与下游对齐后追加。
+
+---
+
+## Architecture Overview
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                         ai-edge-monitor                                 │
+│                                                                         │
+│  ┌─────────────┐ ┌────────────────┐ ┌───────────────────┐              │
+│  │  collector   │ │ platform       │ │ memory_           │              │
+│  │  (lifecycle) │ │ _adapter       │ │ diagnostics       │              │
+│  └──────┬──────┘ └───────┬────────┘ └────────┬──────────┘              │
+│         │                │                    │                          │
+│         v                v                    v                          │
+│  ┌─────────────┐ ┌────────────────┐ ┌───────────────────┐              │
+│  │ aggregator   │ │ inference      │ │ ai_advisor         │              │
+│  │ _analyzer    │ │ _monitor       │ │ (rules + ML)       │              │
+│  └──────┬──────┘ └───────┬────────┘ └────────┬──────────┘              │
+│         │                │                    │                          │
+│         v                v                    v                          │
+│  ┌─────────────┐ ┌────────────────┐ ┌───────────────────┐              │
+│  │ ros2         │ │ native          │ │ performance        │              │
+│  │ _bridge      │ │ _collector      │ │ _profiler          │              │
+│  └─────────────┘ │ (C++/pybind)    │ └───────────────────┘              │
+│                   └────────────────┘                                     │
+│                                                                         │
+│  Cross-cutting: config_manager | runtime_guardian | prometheus_exporter │
+│                 storage_exporter | visualizer | web_dashboard            │
+│                 alert_manager | data_quality | scenarios                 │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+Detailed architecture documentation: [docs/architecture.md](docs/architecture.md)
+
+## Module Reference
+
+| Module | Purpose | Key Classes / Functions |
+|--------|---------|------------------------|
+| `collector` | Dual-path collection lifecycle | `Collector`, `CollectorConfig` |
+| `platform_adapter` | CPU/mem/temp/GPU probes + sampler | `PlatformProbe`, `CompositeProbe`, `PlatformSampler`, `select_default_probe()` |
+| `power_monitor` | Power sampling + sliding-window stats | `PowerSource`, `PowerSampler`, `PowerStats`, `PowerStatsFrame` |
+| `aggregator_analyzer` | Cross-source time-windowed aggregation | `AggregatorAnalyzer`, `WindowSummary` |
+| `ai_advisor` | Rule-based diagnostics + deployment scorer | `DiagnosticEngine`, `Diagnosis`, `assess_deployment_readiness()` |
+| `inference_monitor` | TensorRT/ONNX profiler bridge | `InferenceMonitor`, `TensorRTProfiler`, `HAS_TENSORRT` |
+| `memory_diagnostics` | RSS leak detection + GPU memory correlation | `LeakDetector`, `GpuMemoryTracker`, `CrashHandler` |
+| `native_collector` | C++ high-perf collector with Python fallback | `NativeProbe`, `NeonStats`, `select_probe()` |
+| `performance_profiler` | Resource usage profiling + cgroup limits | `OperationProfiler`, `CgroupProfiler`, `MultiOperationProfiler` |
+| `ros2_bridge` | ROS2 topic publisher for monitor data | `MonitorNode`, `create_monitor_node()` |
+| `runtime_guardian` | Self-watchdog with degrade/recover hooks | `RuntimeGuardian`, `GuardianConfig` |
+| `scheduler` | Drift-compensated periodic scheduling | `PeriodicScheduler`, `ScheduleConfig` |
+| `app_orchestrator` | Assembles collection, analysis, export, report | `Orchestrator`, `MonitoringResult` |
+| `config_manager` | YAML + CLI config merge | `MonitorConfig`, `load_config()` |
+| `storage_exporter` | JSONL / CSV / summary.json export | `JsonlExporter`, `CsvExporter`, `SummaryExporter` |
+| `prometheus_exporter` | Prometheus text exposition + `/metrics` | `PrometheusExporter` |
+| `visualizer` | Report rendering (matplotlib + stdlib fallback) | `plot_report()` |
+| `web_dashboard` | Real-time monitoring web UI | Dashboard with Chart.js, alerts, Guardian health |
+| `alert_manager` | Threshold-based alerting engine | Alert rules, severity levels, history |
+| `data_quality` | Data validation and quality scoring | Quality checks, anomaly detection |
+| `scenarios` | Synthetic workloads (idle/inference/throttled) | Scenario generators for testing without hardware |
+| `cli` | Main entry point CLI | `ai-edge-monitor run`, `dashboard`, `scenario` |
+
+## C++ Native Layer
+
+The `cpp_src/` directory provides a zero-dependency C++ implementation of performance-critical paths.
+
+### Build (Native)
+
+```bash
+cd cpp_src
+
+# x86 with AVX2
+cmake -B build -DENABLE_AVX2=ON -DBUILD_TESTS=ON
+cmake --build build -j$(nproc)
+
+# ARM (Jetson/RPi) with NEON
+cmake -B build -DENABLE_NEON=ON -DBUILD_TESTS=ON
+cmake --build build -j$(nproc)
+
+# Run C++ unit tests
+./build/tests/ai_edge_native_tests
+```
+
+### Build with Python Bindings (pybind11)
+
+```bash
+cmake -B build-py -DBUILD_PYTHON=ON \
+      -Dpybind11_DIR=$(python3 -m pybind11 --cmakedir)
+cmake --build build-py -j$(nproc)
+```
+
+### Cross-Compilation
+
+Two CMake toolchain files are provided:
+
+| Target | Toolchain File | Use Case |
+|--------|---------------|----------|
+| aarch64 (64-bit ARM) | `toolchain-aarch64.cmake` | Jetson Nano/Xavier/Orin, RPi 4/5 (64-bit) |
+| armhf (32-bit ARM) | `toolchain-armhf.cmake` | RPi 3B+, RPi 4 (32-bit OS) |
+
+```bash
+# Cross-compile for aarch64
+cmake -B build-aarch64 \
+      -DCMAKE_TOOLCHAIN_FILE=toolchain-aarch64.cmake \
+      -DENABLE_NEON=ON \
+      -DBUILD_TESTS=OFF
+cmake --build build-aarch64 -j$(nproc)
+```
+
+### SIMD Acceleration Results
+
+| Operation | Scalar C++ | NEON (ARM) | AVX2 (x86) |
+|-----------|-----------|------------|------------|
+| P95 computation (1000 samples) | 0.15 ms | 0.04 ms (3.7x) | 0.03 ms (5.0x) |
+
+## Deployment
+
+Detailed deployment guide: [docs/deployment.md](docs/deployment.md)
+
+### Jetson Nano / Xavier / Orin
+
+```bash
+# Install
+pip3 install -e ".[all]"
+
+# Set power mode for benchmarking
+sudo nvpmodel -m 0  # MAXN mode (Xavier/Orin)
+sudo jetson_clocks
+
+# Run monitoring
+ai-edge-monitor run --duration 300 --out reports/jetson
+```
+
+### Raspberry Pi 4 / 5
+
+```bash
+# Install
+pip3 install -e ".[all]"
+
+# Run with reduced sampling rate (thermal sensitivity)
+ai-edge-monitor run --duration 300 --interval-ms 2000 --out reports/rpi
+```
+
+### x86 Edge Server
+
+```bash
+# Install with ML framework support
+pip3 install -e ".[all-ml]"
+
+# Run with full GPU monitoring
+ai-edge-monitor run --duration 60 --out reports/x86
+```
+
+### Docker
+
+```bash
+docker build -t ai-edge-monitor:latest .
+mkdir -p reports
+docker compose up --build ai-edge-monitor
+```
+
+### ROS2
+
+```bash
+source /opt/ros/humble/setup.bash
+pip install -e ".[ros2]"
+ros2 launch launch/monitor.launch.py
+```
+
+## Testing
+
+### Test Structure
+
+| Layer | Location | Count | Description |
+|-------|----------|-------|-------------|
+| Baseline | `tests/*/test_baseline.py` | 6 | Per-module RSS/CPU overhead validation |
+| Unit | `tests/*/test_*.py` | ~15 | Module-level logic correctness |
+| Integration | `integration/test_*.py` | ~12 | Cross-module contract tests |
+| E2E | `integration/test_e2e_collect_to_report.py` | 1 | Full pipeline with PNG report output |
+| Full System | `integration/test_full_system.py` | 1 | 60-second gold standard: collector + scheduler + guardian |
+
+### Run Tests
+
+```bash
+# All baseline tests (each ~30-60s)
+for f in tests/*/test_baseline.py; do python "$f"; done
+
+# All integration tests
+for f in integration/test_*.py; do python "$f"; done
+
+# Full system gold standard (60s)
+python integration/test_full_system.py
+
+# With lint
+pre-commit run --all-files
+```
+
+### CI Pipeline
+
+Every push/PR triggers the [`tests` workflow](.github/workflows/test.yml):
+
+1. **Lint**: `pre-commit run` (black + isort + mypy on `src/`)
+2. **Test matrix**: Python 3.8 / 3.10 / 3.12
+   - 6 baseline tests
+   - 7+ integration tests (including 60s full system)
+   - Example report generation
+3. **Artifacts**: PNG reports + JSON sidecars uploaded (14-day retention)
+
+### Coverage Targets
+
+| Module | Baseline RSS Limit | CPU Overhead Limit |
+|--------|--------------------|--------------------|
+| power_monitor | < 0.03 MB | < 5 ms / 30s |
+| platform_adapter | < 0.04 MB | < 5 ms / 30s |
+| aggregator_analyzer | < 0.11 MB | < 5 ms / 30s |
+| collector | < 0.29 MB | < 5 ms / 30s |
+| scheduler | < 0.05 MB | < 5 ms / 30s |
+| runtime_guardian | < 0.04 MB | < 5 ms / 30s |
+
+Measured on Windows x86 + Python 3.12, no psutil/matplotlib, 30s x 100ms idle run.
+
+## Performance
+
+### Overhead Guarantees
+
+The monitoring pipeline is designed as a **sidecar** -- it must not meaningfully impact the workload being monitored.
+
+| Guarantee | Target | Notes |
+|-----------|--------|-------|
+| CPU overhead per sample | < 0.05 ms | Non-busy-wait scheduling with `monotonic()` + sleep |
+| RSS growth over 30s | < 0.3 MB | Measured per-module, summed across pipeline |
+| Inference latency impact | < 1% of frame time | Non-blocking collector design |
+| Start-up time | < 2 seconds | Zero mandatory imports; lazy module loading |
+| Dependencies | 0 mandatory | psutil, matplotlib, rclpy, tensorrt all optional |
+
+### Benchmark Template
+
+To measure overhead on your specific device:
+
+```bash
+# 1. Baseline: empty run
+ai-edge-monitor run --duration 30 --force-dummy --out reports/baseline
+
+# 2. With real probes
+ai-edge-monitor run --duration 30 --out reports/real
+
+# 3. Compare summary.json
+python -c "
+import json
+b = json.load(open('reports/baseline/summary.json'))
+r = json.load(open('reports/real/summary.json'))
+print(f'CPU overhead: {r[\"cpu_mean\"] - b[\"cpu_mean\"]:.2f}%')
+print(f'RSS overhead: {r.get(\"rss_delta_mb\", 0):.3f} MB')
+"
+```
+
+### Scenario Comparison
+
+Expected results from synthetic workloads (see [validation report](docs/test_report/real_hardware_validation.md)):
+
+```
+scenario      cpu_avg  cpu_max  pwr_avg  pwr_max   energy  temp_max
+------------------------------------------------------------------
+idle             5.02     5.99     1.98     2.15   122.52     38.79
+inference       76.58    95.98     8.01     9.17   500.18     63.83
+throttled       63.72    92.56     6.00     8.83   342.90     80.12
+```

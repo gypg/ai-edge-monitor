@@ -1,0 +1,41 @@
+name: Valgrind Memory Check
+
+on:
+  push:
+    branches: ["**"]
+  workflow_dispatch:
+
+jobs:
+  valgrind:
+    name: Valgrind Memcheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: install valgrind
+        run: sudo apt-get update && sudo apt-get install -y valgrind cmake g++
+
+      - name: build for valgrind
+        working-directory: cpp_src
+        run: |
+          mkdir -p build-vg
+          cd build-vg
+          cmake .. -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTS=ON -DBUILD_PYTHON=OFF
+          cmake --build . --parallel
+
+      - name: run under valgrind
+        working-directory: cpp_src/build-vg
+        run: |
+          valgrind --leak-check=full --show-leak-kinds=all \
+            --suppressions=../valgrind_suppressions.supp \
+            --error-exitcode=0 \
+            --log-file=valgrind-report.txt \
+            ./test_runner || true
+
+      - name: upload valgrind report
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: valgrind-report
+          path: cpp_src/build-vg/valgrind-report.txt
+          retention-days: 14

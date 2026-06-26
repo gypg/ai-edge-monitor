@@ -1,0 +1,12 @@
+{
+   dl_open_reachable
+   Memcheck:Leak
+   ...
+   obj:*/libdl*
+}
+{
+   pthread_create_reachable
+   Memcheck:Leak
+   ...
+   obj:*/libpthread*
+}

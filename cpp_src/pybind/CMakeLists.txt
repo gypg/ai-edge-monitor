@@ -1,0 +1,4 @@
+find_package(pybind11 REQUIRED)
+
+pybind11_add_module(ai_edge_native_py bindings.cpp)
+target_link_libraries(ai_edge_native_py PRIVATE ai_edge_native)

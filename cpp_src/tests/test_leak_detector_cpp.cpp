@@ -23,7 +23,10 @@ extern int g_failed;
     static int test_##name()
 
 // Forward-declare registration vector
-struct TestEntry;
+struct TestEntry {
+    const char* name;
+    int (*fn)();
+};
 extern std::vector<TestEntry>& tests;
 
 // We include the macro definitions via test_runner's test_main.cpp,

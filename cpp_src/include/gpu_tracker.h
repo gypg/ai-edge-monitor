@@ -4,6 +4,7 @@
 
 #include <cmath>
 #include <deque>
+#include <numeric>
 #include <optional>
 #include <tuple>
 #include <vector>

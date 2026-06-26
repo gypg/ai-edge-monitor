@@ -13,8 +13,8 @@ class CooldownTracker:
     def should_fire(self, rule_name: str, cooldown_sec: float = 60.0) -> bool:
         """Return True if *rule_name* is outside its cooldown window."""
         now = time.monotonic()
-        last = self._last_fired.get(rule_name, 0.0)
-        if now - last < cooldown_sec:
+        last = self._last_fired.get(rule_name)
+        if last is not None and now - last < cooldown_sec:
             return False
         self._last_fired[rule_name] = now
         return True

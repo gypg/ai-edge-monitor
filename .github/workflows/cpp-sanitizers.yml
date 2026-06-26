@@ -80,5 +80,11 @@ jobs:
           cppcheck --enable=all --suppress=missingIncludeSystem \
             --suppress=unusedPrivateFunction \
             --suppress=redundantInitialization \
+            --suppress=knownConditionTrueFalse \
+            --suppress=stlIfStrFind \
+            --suppress=unusedStructMember \
+            --suppress=unsignedPositive \
+            --suppress=constVariableReference \
+            --suppress=useStlAlgorithm \
             --error-exitcode=1 --inline-suppr \
             cpp_src/

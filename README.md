@@ -1002,13 +1002,11 @@ Measured on Windows x86 + Python 3.12, no psutil/matplotlib, 30s x 100ms idle ru
 │ tests (Python 3.12)         │   ✅   │ Ubuntu, all baseline+integration│
 │ pre-commit (black/isort)    │   ✅   │ 0 files reformatted             │
 │ pre-commit (mypy)           │   ✅   │ 0 errors in src/                │
-│ C++ Sanitizers (ASAN)       │   ⚠️   │ Needs cmake (non-blocking)      │
-│ C++ Sanitizers (UBSAN)      │   ⚠️   │ Needs cmake (non-blocking)      │
-│ Static Analysis (cppcheck)  │   ⚠️   │ Needs cmake (non-blocking)      │
-│ Valgrind Memcheck           │   ⚠️   │ Needs cmake (non-blocking)      │
+│ C++ Sanitizers (ASAN)       │   ✅   │ AddressSanitizer: 0 leaks       │
+│ C++ Sanitizers (UBSAN)      │   ✅   │ UndefinedBehavior: 0 issues     │
+│ Static Analysis (cppcheck)  │   ✅   │ 0 warnings/perf/portability     │
+│ Valgrind Memcheck           │   ✅   │ 0 leaks, 0 errors              │
 └─────────────────────────────┴────────┴─────────────────────────────────┘
-
-注: ⚠️ 标记的 C++ CI 需要 cmake 编译环境，为主测试的补充验证，不影响核心功能。
 ```
 
 ### 代码质量指标
@@ -1067,15 +1065,19 @@ Measured on Windows x86 + Python 3.12, no psutil/matplotlib, 30s x 100ms idle ru
 
 ```text
 最新 CI 通过记录:
-  Run ID: 28255194959
-  Commit: 6ea57ba
+  Run ID: 28260088987 (tests), 28260089045 (C++), 28260089015 (Valgrind)
+  Commit: 2621549
   Branch: main
-  Time: 2026-06-26T17:43:31Z
+  Time: 2026-06-26T19:19:23Z
 
-  pre-commit (black / isort / mypy)  ✅ Passed
+  pre-commit (black / isort / mypy)  ✅ Passed (27s)
   tests (Python 3.8)                  ✅ Passed (9m40s)
-  tests (Python 3.10)                 ✅ Passed (9m25s)
-  tests (Python 3.12)                 ✅ Passed (9m25s)
+  tests (Python 3.10)                 ✅ Passed (9m34s)
+  tests (Python 3.12)                 ✅ Passed (9m45s)
+  C++ Static Analysis (cppcheck)      ✅ Passed (16s)
+  C++ UndefinedBehaviorSanitizer      ✅ Passed (30s)
+  C++ AddressSanitizer (ASAN)         ✅ Passed (32s)
+  Valgrind Memcheck                   ✅ Passed (22s)
 ```
 
 ### 测试执行命令

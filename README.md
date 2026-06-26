@@ -1,12 +1,71 @@
 # ai-edge-monitor
 
 ![tests](https://github.com/gypg/ai-edge-monitor/actions/workflows/test.yml/badge.svg)
+![C++ Sanitizers](https://github.com/gypg/ai-edge-monitor/actions/workflows/cpp-sanitizers.yml/badge.svg)
 ![Python 3.8+](https://img.shields.io/badge/python-3.8%20%7C%203.10%20%7C%203.12-blue)
 ![License](https://img.shields.io/badge/license-Proprietary-orange)
 
-> 面向 Jetson、Raspberry Pi、x86 边缘服务器的轻量级硬件监控管线，专为 AI 推理部署前后的性能评估设计。
+## 这个项目解决什么问题？
 
-`ai-edge-monitor` 把"采集 → 分析 → 报告"打通成一条独立、低开销、可旁路降级的链路：每个模块都自带基线测试与集成测试，关键路径在开发机上 30s × 100ms 空跑的 CPU 增量 < 0.05ms、RSS 增量 < 0.05MB。
+**一句话回答：给定一台边缘设备和一个 AI 模型，告诉你能不能跑、能跑多快、瓶颈在哪、怎么优化。**
+
+嵌入式 AI 开发者最常遇到的问题：
+
+- "我有一台 Jetson Nano，想跑 YOLOv8-nano，能跑到 30FPS 吗？"
+- "这台 Raspberry Pi 4 能承受多大的模型？内存够不够？会不会过热降频？"
+- "TensorRT 量化后到底提升了多少？CPU 和 GPU 谁是瓶颈？"
+- "长时间运行会不会内存泄漏？功耗会不会超预算？"
+
+`ai-edge-monitor` 就是为了解决这些问题而生的。它不是通用的系统监控工具，而是一个**专门面向 AI 推理部署的性能评估系统**——它能：
+
+1. **采集**真实的硬件指标（CPU/GPU/内存/温度/功耗）
+2. **分析**推理性能（FPS、延迟 P95/P99、GPU 利用率）
+3. **诊断**瓶颈（CPU-bound? GPU-bound? 内存不足? 温度降频?）
+4. **评分**部署就绪度（0-100 分，自动判定 ready/marginal/not_ready）
+5. **建议**优化方向（量化? 换模型? 降 batch size? 改散热?）
+
+### 典型使用场景
+
+```
+场景 1: 选型评估
+  输入: Jetson Orin Nano + YOLOv8-s (ONNX, FP16)
+  输出: FPS=28.3, P95=35ms, 温度72°C, 功耗12W
+  判定: 可部署 (score=82, ready)
+  建议: INT8 量化可提升至 40+ FPS
+
+场景 2: 优化对比
+  优化前: FP32 → FPS=15.2, P95=65ms, GPU利用率98%
+  优化后: FP16 → FPS=28.3, P95=35ms, GPU利用率72%
+  结论: GPU 瓶颈解除，仍有 headroom
+
+场景 3: 长时间稳定性
+  运行: 24h 连续推理
+  检测: RSS 从 512MB 缓增至 680MB (泄漏风险)
+  告警: 内存泄漏风险，建议检查 TensorRT context 生命周期
+```
+
+### 项目定位
+
+> 这个项目来源于嵌入式 AI 社区的实际需求——有人提出需要一个工具来**计算边缘设备能承受的 AI 推理性能上限**，并给出了相关的计算方法和参考框架。`ai-edge-monitor` 就是基于这些方法论，用工程化的方式实现出来的一套完整工具链。
+
+核心能力对照：
+
+| 你想知道的 | ai-edge-monitor 怎么回答 |
+|-----------|------------------------|
+| 这个设备能跑这个模型吗？ | `assess_deployment_readiness()` → ready/marginal/not_ready |
+| 最大能跑到多少 FPS？ | `InferenceBenchmark.run_simulated()` + `DeploymentScorer` |
+| CPU 和 GPU 谁是瓶颈？ | `DiagnosticEngine.diagnose()` → 12 条诊断规则 |
+| 会不会过热降频？ | 温度监控 + 热节流检测 + 70/80°C 两级告警 |
+| 内存够不够？会不会泄漏？ | `LeakDetector` 线性回归 + `GpuMemoryTracker` |
+| 功耗超不超预算？ | `PowerMonitor` + 功耗评分 (0-100) |
+| 优化后提升了多少？ | `BenchmarkHarness.compare_runs()` → 回归检测 |
+| 怎么进一步优化？ | `MetricAnomalyDetector` + 12 条优化建议规则 |
+
+---
+
+> **面向 Jetson、Raspberry Pi、x86 边缘服务器的 AI 推理性能评估系统。**
+
+`ai-edge-monitor` 把"采集 → 分析 → 诊断 → 评分 → 建议"打通成一条独立、低开销、可旁路降级的链路：每个模块都自带基线测试与集成测试，关键路径在开发机上 30s × 100ms 空跑的 CPU 增量 < 0.05ms、RSS 增量 < 0.05MB。
 
 ## 实测输出
 

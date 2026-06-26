@@ -99,6 +99,63 @@ ai-edge-monitor scenario --duration 60 --out docs/test_report/scenarios
 - **推理负载示例**：`examples/inference_demo.py` 用纯 Python 模拟持续推理负载，可与监控命令并行验证报告效果
 - **场景驱动**：`src/scenarios/` 提供 idle / inference / throttled 三种合成负载，无真机也能预演分析能力
 
+## 嵌入式 AI 性能优化场景
+
+### 解决开发者核心痛点
+
+嵌入式 AI 开发者（尤其是视觉模型部署方向）面临以下挑战，`ai-edge-monitor` 直接解决：
+
+1. **性能优化验证**
+   - **痛点**：如何量化评估"用最低 CPU 达到最高帧率且延迟低"的效果？
+   - **解决方案**：实时监控 CPU/内存/GPU 利用率，生成性能基线报告
+   - **应用场景**：TensorRT/ONNX Runtime 推理优化前后对比
+
+2. **问题排查与稳定性**
+   - **痛点**：C++ 内存泄漏、crash、踩内存等问题难以复现
+   - **解决方案**：runtime_guardian 持续监控 RSS 内存增长趋势
+   - **应用场景**：长时间推理任务的稳定性验证
+
+3. **功耗与热管理**
+   - **痛点**：嵌入式设备功耗敏感，散热受限
+   - **解决方案**：独立功耗监控 + 温度阈值告警
+   - **应用场景**：Jetson/Raspberry Pi 等边缘设备的功耗优化
+
+### 典型工作流
+
+```bash
+# 1. 启动监控（后台运行）
+ai-edge-monitor run --duration 300 --out reports/inference_optimization &
+
+# 2. 运行你的推理任务
+python your_inference_script.py --model model.onnx --input video.mp4
+
+# 3. 查看优化效果报告
+# reports/inference_optimization/report.png
+# reports/inference_optimization/summary.json
+```
+
+### 与推理框架集成
+
+项目设计为**旁路监控**，不影响推理性能：
+
+- **TensorRT**：监控 GPU 利用率、显存占用
+- **ONNX Runtime**：CPU/GPU 推理性能对比
+- **OpenCV DNN**：多线程推理的 CPU 负载分析
+- **自定义 C++ Pipeline**：通过 Prometheus exporter 集成
+
+### 量化优化效果
+
+通过 `aggregator_analyzer` 提供关键指标：
+- **CPU 平均/P95/峰值利用率**
+- **内存使用趋势**（检测泄漏）
+- **功耗与能效比**（Joules/inference）
+- **温度变化曲线**（热节流预警）
+
+这些数据帮助开发者：
+1. 验证 Neon 加速、多线程优化的实际效果
+2. 识别瓶颈（CPU-bound vs GPU-bound vs Memory-bound）
+3. 建立性能基准，指导后续优化方向
+
 ## 架构
 
 ```mermaid
@@ -215,6 +272,100 @@ python examples/inference_demo.py --duration-sec 20 --size 64
 ```bash
 ai-edge-monitor scenario --scenario inference --duration 60 --out docs/test_report/scenarios
 ```
+
+### 实时 Web 仪表盘
+
+启动轻量级 Web 监控面板（零前端依赖，适合 Jetson/RPi）：
+
+```bash
+# 方式一：CLI 子命令
+ai-edge-monitor dashboard --port 8080 --duration 300
+
+# 方式二：独立启动脚本
+python dashboard.py --port 8080 --force-dummy   # 测试模式（dummy 探针）
+
+# 访问 http://<device-ip>:8080
+```
+
+仪表盘功能：
+- **实时图表**：CPU / 内存 / 功耗时间线（Chart.js，3 秒轮询）
+- **系统概览**：CPU、内存、功耗、温度、磁盘使用率仪表盘
+- **告警面板**：活跃告警与历史记录（颜色分级：INFO → WARNING → ERROR → CRITICAL）
+- **Guardian 健康**：监控进程自身的 CPU/RSS 开销、降级状态、熔断器状态
+- **网络 I/O**：发送/接收速率、连接数
+
+### AI Advisor（自动诊断）
+
+基于指标模式自动识别系统瓶颈，生成结构化优化建议：
+
+```bash
+# 诊断由 dashboard 自动运行，也可独立调用
+from ai_advisor import Advisor
+advisor = Advisor()
+diagnosis = advisor.diagnose(summary_dict)
+# => [{"category": "thermal", "priority": "high", "suggestion": "...", "evidence": "..."}]
+```
+
+- **10+ 诊断规则**：覆盖 FPS 不达标、CPU/GPU 瓶颈、温度过高、功耗超预算等场景
+- **模式识别**：基于滑动窗口指标趋势，而非单一阈值
+- **结构化建议**：每条建议含 `category`、`priority`、`suggestion`、`evidence` 四个字段
+
+### 推理监控（TensorRT / ONNX Runtime）
+
+通过 `InferenceMonitor` 上下文管理器直接关联推理指标与硬件状态：
+
+```python
+from inference_monitor import InferenceMonitor
+
+with InferenceMonitor(target_fps=30, target_latency_ms=33.0) as monitor:
+    for frame in video_stream:
+        result = model.infer(frame)
+        monitor.record_frame()
+
+report = monitor.finalize()
+# => {"fps": 28.5, "p95_latency_ms": 35.2, "deployment_score": 72, ...}
+```
+
+- **TensorRT Profiler 集成**：自动注册 profiler 回调，采集 per-layer 执行时间
+- **ONNX Runtime Profiling**：提取 session profiling 数据，关联硬件指标
+- **部署就绪评分**：基于 FPS / 延迟 / 温度 / 功耗四维度综合打分（0-100）
+- **优雅降级**：无推理框架时自动使用 dummy 采集，不阻塞监控
+
+### 内存泄漏检测
+
+持续追踪 RSS 内存增长趋势，检测推理进程的隐式泄漏：
+
+```python
+from memory_diagnostics import GpuMemoryTracker, LeakDetector
+
+detector = LeakDetector(pid=pid, window_size=60)
+# ... 周期性采集
+if detector.is_leaking():
+    report = detector.generate_report()
+```
+
+- **RSS 线性回归检测**：基于滑动窗口的线性增长识别
+- **GPU 显存关联**：同步追踪 CPU RSS + GPU 显存，关联分析泄漏来源
+- **Debug Bundle 生成**：一键打包 `/proc/<pid>/status`、`/proc/<pid>/maps`、`dmesg` 等诊断信息
+- **信号处理器包装**：捕获 SIGSEGV 等崩溃信号，自动生成诊断 bundle
+
+### 原生 C++ 采集器
+
+用 C++ 实现零依赖的高性能指标采集，支持 NEON 加速和交叉编译：
+
+- **NEON SIMD 加速**：P95 计算速度提升 3x 以上（vs 纯 C++ 标量实现）
+- **pybind11 桥接**：`from native_collector import NativeProbe`，接口与 `PlatformProbe` 兼容
+- **交叉编译**：CMake 工具链支持 aarch64（Jetson/RPi）和 x86_64
+- **自动降级**：无 C++ 模块时自动回退到 Python 实现
+
+### ROS2 集成
+
+作为 ROS2 节点发布监控数据，无缝对接机器人技术栈：
+
+- **标准 Topic 发布**：`/cpu`、`/memory`、`/power`、`/temperature` 四个基础监控 topic
+- **推理 Topic**：`/inference/fps`、`/inference/latency`、`/inference/gpu_util` 三个推理指标 topic
+- **Launch 文件**：提供标准 ROS2 launch 文件，一键启动
+- **可选依赖**：通过 `pip install -e ".[ros2]"` 安装 rclpy 支持
 
 ### 运行端到端测试
 

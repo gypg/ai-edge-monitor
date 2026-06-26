@@ -5,7 +5,7 @@ import json
 import sys
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from aggregator_analyzer import AggregatorAnalyzer
 from app_orchestrator import Orchestrator
@@ -52,6 +52,24 @@ def _build_parser() -> argparse.ArgumentParser:
     scenario_parser.add_argument("--out", type=str, default="docs/test_report/scenarios")
     scenario_parser.add_argument("--scenario", action="append", choices=SCENARIOS, default=None)
     scenario_parser.set_defaults(func=_scenario_command)
+
+    dash_parser = sub.add_parser("dashboard", help="start real-time web dashboard")
+    dash_parser.add_argument("--host", type=str, default="0.0.0.0")
+    dash_parser.add_argument("--port", type=int, default=8080)
+    dash_parser.add_argument("--config", type=str, default=None)
+    dash_parser.add_argument("--force-dummy", action="store_true",
+                             help="use dummy probes (for testing)")
+    dash_parser.add_argument("--duration", type=int, default=300,
+                             help="monitoring duration in seconds (default 300)")
+    dash_parser.add_argument("--interval", type=int, default=1000,
+                             help="sample interval in ms (default 1000)")
+    dash_parser.add_argument("--inference-model", type=str, default=None,
+                             help="path to inference model for monitoring")
+    dash_parser.add_argument("--target-fps", type=int, default=30,
+                             help="target FPS for deployment scoring (default 30)")
+    dash_parser.add_argument("--target-latency", type=float, default=33.0,
+                             help="target latency in ms (default 33)")
+    dash_parser.set_defaults(func=_dashboard_command)
 
     return parser
 
@@ -150,6 +168,100 @@ def _run_scenario(
         "energy_joule": summary["energy_joule"],
         "report_path": str(report_path),
     }
+
+
+def _dashboard_command(args: argparse.Namespace) -> int:
+    """Start the real-time web dashboard with live monitoring."""
+    import signal
+    import threading
+
+    from aggregator_analyzer import AggregatorAnalyzer
+    from collector import Collector, CollectorConfig
+    from config_manager import load_config
+    from web_dashboard import DashboardServer
+
+    config = load_config(
+        args.config,
+        overrides={
+            "duration_sec": args.duration,
+            "interval_ms": args.interval,
+            "force_dummy": True if args.force_dummy else None,
+        },
+    )
+
+    # Build data pipeline
+    analyzer = AggregatorAnalyzer(window_sec=max(120, config.duration_sec * 4))
+
+    # Optional modules (graceful if not available)
+    alert_manager = None
+    guardian = None
+    system_monitor = None
+    try:
+        from alert_manager import AlertManager
+        alert_manager = AlertManager()
+    except ImportError:
+        pass
+    try:
+        from runtime_guardian import RuntimeGuardian
+        guardian = RuntimeGuardian()
+        guardian.start()
+    except (ImportError, Exception):
+        pass
+    try:
+        from system_monitor import SystemMonitor
+        system_monitor = SystemMonitor()
+    except ImportError:
+        pass
+
+    collector = Collector(
+        CollectorConfig(
+            interval_ms=config.interval_ms,
+            platform_prefer=_platform_prefer(config.device),
+            force_dummy=config.force_dummy,
+            power_window_size=max(8, config.duration_sec),
+        ),
+        analyzer=analyzer,
+    )
+
+    # Wire dashboard context
+    context = {
+        "summary_provider": analyzer.get_summary_dict,
+        "alert_manager": alert_manager,
+        "guardian": guardian,
+        "system_monitor": system_monitor,
+        "config": config,
+        "inference_model": args.inference_model,
+        "target_fps": args.target_fps,
+        "target_latency": args.target_latency,
+    }
+
+    dashboard = DashboardServer(host=args.host, port=args.port, context=context)
+    collector.start()
+    dashboard.start()
+
+    print(f"Dashboard running at {dashboard.url}")
+    print(f"Monitoring for {config.duration_sec}s (Ctrl+C to stop early)")
+
+    stop_event = threading.Event()
+
+    def _on_signal(signum: int, frame: Any) -> None:
+        stop_event.set()
+
+    signal.signal(signal.SIGINT, _on_signal)
+    signal.signal(signal.SIGTERM, _on_signal)
+
+    stop_event.wait(timeout=config.duration_sec)
+
+    dashboard.stop()
+    collector.stop()
+    if guardian is not None:
+        try:
+            guardian.stop()
+        except Exception:
+            pass
+
+    print("Dashboard stopped.")
+    return 0
 
 
 if __name__ == "__main__":

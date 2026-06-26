@@ -30,6 +30,10 @@ dependencies = []
 psutil = ["psutil>=5.9"]
 viz = ["matplotlib>=3.5"]
 all = ["psutil>=5.9", "matplotlib>=3.5"]
+ros2 = ["rclpy"]
+tensorrt = ["tensorrt"]
+onnxruntime = ["onnxruntime"]
+all-ml = ["rclpy", "tensorrt", "onnxruntime"]
 dev = [
     "psutil>=5.9",
     "matplotlib>=3.5",
@@ -66,6 +70,9 @@ include = [
     "scheduler*",
     "storage_exporter*",
     "visualizer*",
+    "inference_monitor*",
+    "memory_diagnostics*",
+    "ai_advisor*",
 ]
 exclude = ["__pycache__*"]
 
@@ -107,6 +114,7 @@ known_first_party = [
     "scheduler",
     "storage_exporter",
     "visualizer",
+    "ai_advisor",
 ]
 
 [tool.mypy]

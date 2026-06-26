@@ -36,6 +36,26 @@ class PrometheusExporter:
                 "Maximum observed temperature in Celsius.",
                 _float_value(summary.get("temp_max_c")),
             ),
+            (
+                "ai_edge_inference_fps",
+                "Inference frames per second.",
+                _float_value(summary.get("inference_fps")),
+            ),
+            (
+                "ai_edge_inference_latency_p95",
+                "Inference P95 latency in ms.",
+                _float_value(summary.get("inference_latency_p95_ms")),
+            ),
+            (
+                "ai_edge_active_alerts",
+                "Number of active alerts.",
+                _float_value(summary.get("active_alerts")),
+            ),
+            (
+                "ai_edge_deployment_score",
+                "Deployment readiness score 0-100.",
+                _float_value(summary.get("deployment_score")),
+            ),
         ]
         lines = []
         for name, help_text, value in metrics:

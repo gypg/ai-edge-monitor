@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, Mapping, Optional, Tuple, Union
@@ -16,6 +17,55 @@ _ALLOWED_KEYS = {
 }
 _ALLOWED_EXPORTERS = {"jsonl", "csv", "summary", "png"}
 _DEFAULT_THRESHOLDS = {"cpu_high": 85.0, "temp_high": 80.0}
+
+# 环境变量前缀
+_ENV_PREFIX = "AI_EDGE_MONITOR_"
+
+# 环境变量映射：环境变量名 -> 配置键
+_ENV_MAPPING = {
+    f"{_ENV_PREFIX}DURATION_SEC": "duration_sec",
+    f"{_ENV_PREFIX}INTERVAL_MS": "interval_ms",
+    f"{_ENV_PREFIX}OUTPUT_DIR": "output_dir",
+    f"{_ENV_PREFIX}DEVICE": "device",
+    f"{_ENV_PREFIX}FORCE_DUMMY": "force_dummy",
+    f"{_ENV_PREFIX}EXPORTERS": "exporters",
+    f"{_ENV_PREFIX}CPU_HIGH": "cpu_high",
+    f"{_ENV_PREFIX}TEMP_HIGH": "temp_high",
+}
+
+# 配置验证规则
+_VALIDATION_RULES = {
+    "duration_sec": {
+        "type": int,
+        "min": 1,
+        "max": 86400,  # 24小时
+        "description": "监控时长（秒）",
+    },
+    "interval_ms": {
+        "type": int,
+        "min": 100,
+        "max": 60000,  # 1分钟
+        "description": "采样间隔（毫秒）",
+    },
+    "output_dir": {
+        "type": str,
+        "description": "输出目录",
+    },
+    "device": {
+        "type": str,
+        "allowed_values": ["auto", "cpu", "gpu", "jetson", "rpi", "nvidia-smi", "procfs", "psutil", "embedded"],
+        "description": "目标设备类型",
+    },
+    "force_dummy": {
+        "type": bool,
+        "description": "强制使用虚拟数据源",
+    },
+    "exporters": {
+        "type": list,
+        "allowed_values": list(_ALLOWED_EXPORTERS),
+        "description": "导出器列表",
+    },
+}
 
 
 class ConfigError(ValueError):
@@ -56,13 +106,88 @@ class MonitorConfig:
 def load_config(
     path: Optional[PathLike] = None, overrides: Optional[Mapping[str, Any]] = None
 ) -> MonitorConfig:
+    """加载配置，优先级：默认值 < 环境变量 < 配置文件 < CLI参数"""
     raw: Dict[str, Any] = {}
+    
+    # 1. 从环境变量加载
+    env_config = _load_from_env()
+    if env_config:
+        raw.update(env_config)
+    
+    # 2. 从配置文件加载（覆盖环境变量）
     if path is not None:
         raw.update(_load_file(Path(path)))
+    
+    # 3. 从CLI参数加载（最高优先级）
     if overrides:
         raw.update({key: value for key, value in overrides.items() if value is not None})
+    
+    # 4. 验证配置
     _validate_keys(raw)
+    _validate_config(raw)
+    
     return MonitorConfig(**raw)
+
+
+def _load_from_env() -> Dict[str, Any]:
+    """从环境变量加载配置"""
+    config: Dict[str, Any] = {}
+    
+    for env_var, config_key in _ENV_MAPPING.items():
+        value = os.environ.get(env_var)
+        if value is None:
+            continue
+        
+        # 根据配置键类型转换值
+        if config_key == "duration_sec":
+            config[config_key] = _parse_env_int(env_var, value)
+        elif config_key == "interval_ms":
+            config[config_key] = _parse_env_int(env_var, value)
+        elif config_key == "output_dir":
+            config[config_key] = value
+        elif config_key == "device":
+            config[config_key] = value.lower()
+        elif config_key == "force_dummy":
+            config[config_key] = _parse_env_bool(env_var, value)
+        elif config_key == "exporters":
+            # 支持逗号分隔的列表
+            config[config_key] = [x.strip() for x in value.split(",") if x.strip()]
+        elif config_key == "cpu_high":
+            # 阈值单独处理
+            if "thresholds" not in config:
+                config["thresholds"] = {}
+            config["thresholds"]["cpu_high"] = _parse_env_float(env_var, value)
+        elif config_key == "temp_high":
+            if "thresholds" not in config:
+                config["thresholds"] = {}
+            config["thresholds"]["temp_high"] = _parse_env_float(env_var, value)
+    
+    return config
+
+
+def _parse_env_int(env_var: str, value: str) -> int:
+    """解析环境变量为整数"""
+    try:
+        return int(value)
+    except ValueError:
+        raise ConfigError(f"环境变量 {env_var} 必须是整数，当前值: {value}")
+
+
+def _parse_env_float(env_var: str, value: str) -> float:
+    """解析环境变量为浮点数"""
+    try:
+        return float(value)
+    except ValueError:
+        raise ConfigError(f"环境变量 {env_var} 必须是数字，当前值: {value}")
+
+
+def _parse_env_bool(env_var: str, value: str) -> bool:
+    """解析环境变量为布尔值"""
+    if value.lower() in ("true", "1", "yes", "on"):
+        return True
+    if value.lower() in ("false", "0", "no", "off"):
+        return False
+    raise ConfigError(f"环境变量 {env_var} 必须是布尔值，当前值: {value}")
 
 
 def _load_file(path: Path) -> Dict[str, Any]:
@@ -79,6 +204,51 @@ def _validate_keys(raw: Mapping[str, Any]) -> None:
     for key in raw:
         if key not in _ALLOWED_KEYS:
             raise ConfigError(f"unknown config key: {key}")
+
+
+def _validate_config(raw: Mapping[str, Any]) -> None:
+    """验证配置的有效性"""
+    for key, value in raw.items():
+        if key not in _VALIDATION_RULES:
+            continue
+        
+        rule = _VALIDATION_RULES[key]
+        expected_type = rule["type"]
+        
+        # 类型检查
+        if expected_type == int:
+            if not isinstance(value, int):
+                raise ConfigError(f"{key} 必须是整数，当前类型: {type(value).__name__}")
+            if "min" in rule and value < rule["min"]:
+                raise ConfigError(f"{key} 不能小于 {rule['min']}，当前值: {value}")
+            if "max" in rule and value > rule["max"]:
+                raise ConfigError(f"{key} 不能大于 {rule['max']}，当前值: {value}")
+        
+        elif expected_type == float:
+            if not isinstance(value, (int, float)):
+                raise ConfigError(f"{key} 必须是数字，当前类型: {type(value).__name__}")
+        
+        elif expected_type == str:
+            if not isinstance(value, str):
+                raise ConfigError(f"{key} 必须是字符串，当前类型: {type(value).__name__}")
+            if "allowed_values" in rule and value not in rule["allowed_values"]:
+                raise ConfigError(
+                    f"{key} 必须是以下之一: {rule['allowed_values']}，当前值: {value}"
+                )
+        
+        elif expected_type == bool:
+            if not isinstance(value, bool):
+                raise ConfigError(f"{key} 必须是布尔值，当前类型: {type(value).__name__}")
+        
+        elif expected_type == list:
+            if not isinstance(value, (list, tuple)):
+                raise ConfigError(f"{key} 必须是列表，当前类型: {type(value).__name__}")
+            if "allowed_values" in rule:
+                for item in value:
+                    if item not in rule["allowed_values"]:
+                        raise ConfigError(
+                            f"{key} 中的值 '{item}' 不在允许的范围内: {rule['allowed_values']}"
+                        )
 
 
 def _positive_int(name: str, value: Any) -> int:
@@ -149,3 +319,24 @@ def _parse_scalar(value: str) -> Any:
         return int(value)
     except ValueError:
         return value
+
+
+def get_config_summary(config: MonitorConfig) -> Dict[str, Any]:
+    """获取配置摘要，用于调试和日志"""
+    return {
+        "duration_sec": config.duration_sec,
+        "interval_ms": config.interval_ms,
+        "output_dir": config.output_dir,
+        "device": config.device,
+        "force_dummy": config.force_dummy,
+        "exporters": list(config.exporters),
+        "thresholds": config.thresholds,
+    }
+
+
+def print_config_summary(config: MonitorConfig) -> None:
+    """打印配置摘要"""
+    summary = get_config_summary(config)
+    print("配置摘要:")
+    for key, value in summary.items():
+        print(f"  {key}: {value}")

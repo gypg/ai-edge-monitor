@@ -55,6 +55,12 @@ class GuardianConfig:
     rss_mb_high: float = 50.0
     rss_mb_low: float = 40.0
     test_mode: bool = False
+    
+    # 重试和熔断配置
+    max_retries: int = 3
+    retry_delay_sec: float = 1.0
+    circuit_breaker_threshold: int = 5  # 连续失败次数触发熔断
+    circuit_breaker_timeout_sec: float = 60.0  # 熔断恢复时间
 
 
 DegradeFn = Callable[[Dict[str, Any]], None]
@@ -87,6 +93,13 @@ class RuntimeGuardian:
         self._injected_cpu: Optional[float] = None
         self._injected_rss: Optional[float] = None
         self._proc = None
+        
+        # 重试和熔断状态
+        self._consecutive_failures = 0
+        self._circuit_breaker_active = False
+        self._circuit_breaker_until = 0.0
+        self._total_retries = 0
+        self._total_failures = 0
 
         if self._enabled:
             self._proc = psutil.Process(os.getpid())
@@ -113,6 +126,11 @@ class RuntimeGuardian:
                 "sample_count": self._sample_count,
                 "degrade_count": self._degrade_count,
                 "recover_count": self._recover_count,
+                # 重试和熔断状态
+                "consecutive_failures": self._consecutive_failures,
+                "circuit_breaker_active": self._circuit_breaker_active,
+                "total_retries": self._total_retries,
+                "total_failures": self._total_failures,
             }
 
     def inject_test_load(
@@ -159,62 +177,125 @@ class RuntimeGuardian:
             self._thread.join(timeout=join_timeout)
 
     def check_now(self) -> Dict[str, Any]:
-        """Take one immediate sample and apply degrade/recover logic."""
-        cpu_pct = 0.0
-        rss_mb = 0.0
-        if self._proc is not None:
-            try:
-                cpu_pct = float(self._proc.cpu_percent(interval=None))
-            except Exception:
-                cpu_pct = 0.0
-            try:
-                rss_mb = self._proc.memory_info().rss / (1024 * 1024)
-            except Exception:
-                rss_mb = 0.0
-
+        """Take one immediate sample and apply degrade/recover logic with retry and circuit breaker."""
+        # 检查熔断状态
+        now = time.monotonic()
         with self._lock:
-            if self._injected_cpu is not None:
-                cpu_pct = float(self._injected_cpu)
-            if self._injected_rss is not None:
-                rss_mb = float(self._injected_rss)
-            self._last_cpu = cpu_pct
-            self._last_rss = rss_mb
-            self._sample_count += 1
-
-            crossed_high = (
-                cpu_pct > self.config.cpu_percent_high or rss_mb > self.config.rss_mb_high
-            )
-            below_low = cpu_pct < self.config.cpu_percent_low and rss_mb < self.config.rss_mb_low
-
-            transition: Optional[str] = None
-            if not self._degraded and crossed_high:
-                self._degraded = True
-                self._degrade_count += 1
-                transition = "degrade"
-            elif self._degraded and below_low:
-                self._degraded = False
-                self._recover_count += 1
-                transition = "recover"
-
-            health = {
-                "cpu_percent": cpu_pct,
-                "rss_mb": rss_mb,
-                "degraded": self._degraded,
-                "transition": transition,
-            }
-
-        if transition == "degrade" and self._on_degrade is not None:
+            if self._circuit_breaker_active:
+                if now < self._circuit_breaker_until:
+                    # 仍在熔断期间，返回上次的状态
+                    return {
+                        "cpu_percent": self._last_cpu,
+                        "rss_mb": self._last_rss,
+                        "degraded": self._degraded,
+                        "transition": None,
+                        "circuit_breaker_active": True,
+                        "retry_after_sec": self._circuit_breaker_until - now,
+                    }
+                else:
+                    # 熔断恢复
+                    self._circuit_breaker_active = False
+                    self._consecutive_failures = 0
+                    LOG.info("runtime_guardian: circuit breaker recovered")
+        
+        # 重试逻辑
+        last_exception = None
+        for attempt in range(self.config.max_retries + 1):
             try:
-                self._on_degrade(health)
-            except Exception as exc:
-                LOG.error("on_degrade callback failed: %s", exc)
-        elif transition == "recover" and self._on_recover is not None:
-            try:
-                self._on_recover(health)
-            except Exception as exc:
-                LOG.error("on_recover callback failed: %s", exc)
+                cpu_pct = 0.0
+                rss_mb = 0.0
+                if self._proc is not None:
+                    try:
+                        cpu_pct = float(self._proc.cpu_percent(interval=None))
+                    except Exception as exc:
+                        raise Exception(f"cpu_percent failed: {exc}")
+                    try:
+                        rss_mb = self._proc.memory_info().rss / (1024 * 1024)
+                    except Exception as exc:
+                        raise Exception(f"memory_info failed: {exc}")
 
-        return health
+                with self._lock:
+                    if self._injected_cpu is not None:
+                        cpu_pct = float(self._injected_cpu)
+                    if self._injected_rss is not None:
+                        rss_mb = float(self._injected_rss)
+                    self._last_cpu = cpu_pct
+                    self._last_rss = rss_mb
+                    self._sample_count += 1
+                    
+                    # 重置连续失败计数
+                    self._consecutive_failures = 0
+
+                    crossed_high = (
+                        cpu_pct > self.config.cpu_percent_high or rss_mb > self.config.rss_mb_high
+                    )
+                    below_low = cpu_pct < self.config.cpu_percent_low and rss_mb < self.config.rss_mb_low
+
+                    transition: Optional[str] = None
+                    if not self._degraded and crossed_high:
+                        self._degraded = True
+                        self._degrade_count += 1
+                        transition = "degrade"
+                    elif self._degraded and below_low:
+                        self._degraded = False
+                        self._recover_count += 1
+                        transition = "recover"
+
+                    health = {
+                        "cpu_percent": cpu_pct,
+                        "rss_mb": rss_mb,
+                        "degraded": self._degraded,
+                        "transition": transition,
+                        "circuit_breaker_active": False,
+                        "retry_attempt": attempt,
+                    }
+
+                if transition == "degrade" and self._on_degrade is not None:
+                    try:
+                        self._on_degrade(health)
+                    except Exception as exc:
+                        LOG.error("on_degrade callback failed: %s", exc)
+                elif transition == "recover" and self._on_recover is not None:
+                    try:
+                        self._on_recover(health)
+                    except Exception as exc:
+                        LOG.error("on_recover callback failed: %s", exc)
+
+                return health
+                
+            except Exception as exc:
+                last_exception = exc
+                self._total_retries += 1
+                
+                if attempt < self.config.max_retries:
+                    LOG.warning("runtime_guardian: sample failed (attempt %d/%d): %s", 
+                               attempt + 1, self.config.max_retries + 1, exc)
+                    time.sleep(self.config.retry_delay_sec)
+        
+        # 所有重试都失败了
+        with self._lock:
+            self._consecutive_failures += 1
+            self._total_failures += 1
+            
+            # 检查是否需要触发熔断
+            if self._consecutive_failures >= self.config.circuit_breaker_threshold:
+                self._circuit_breaker_active = True
+                self._circuit_breaker_until = now + self.config.circuit_breaker_timeout_sec
+                LOG.error("runtime_guardian: circuit breaker activated after %d consecutive failures", 
+                         self._consecutive_failures)
+        
+        LOG.error("runtime_guardian: all %d attempts failed: %s", 
+                 self.config.max_retries + 1, last_exception)
+        
+        return {
+            "cpu_percent": self._last_cpu,
+            "rss_mb": self._last_rss,
+            "degraded": self._degraded,
+            "transition": None,
+            "circuit_breaker_active": self._circuit_breaker_active,
+            "error": str(last_exception),
+            "retry_attempt": self.config.max_retries,
+        }
 
     def _run_loop(self) -> None:
         while not self._stop_event.is_set():

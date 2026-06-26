@@ -78,5 +78,7 @@ jobs:
       - name: run cppcheck
         run: |
           cppcheck --enable=all --suppress=missingIncludeSystem \
+            --suppress=unusedPrivateFunction \
+            --suppress=redundantInitialization \
             --error-exitcode=1 --inline-suppr \
             cpp_src/

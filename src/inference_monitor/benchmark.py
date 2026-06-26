@@ -89,8 +89,11 @@ def _get_rss_mb() -> float:
 
         counters = PROCESS_MEMORY_COUNTERS()
         counters.cb = ctypes.sizeof(counters)
-        ctypes.windll.kernel32.GetProcessMemoryInfo(
-            ctypes.windll.kernel32.GetCurrentProcess(),
+        windll = getattr(ctypes, "windll", None)
+        if windll is None:
+            return 0.0
+        windll.kernel32.GetProcessMemoryInfo(
+            windll.kernel32.GetCurrentProcess(),
             ctypes.byref(counters),
             counters.cb,
         )

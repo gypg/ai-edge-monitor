@@ -264,9 +264,12 @@ class OperationProfiler:
         """
         if _resource is not None:
             try:
-                import resource as _ru_mod
+                import resource
 
-                ru = _ru_mod.getrusage(_ru_mod.RUSAGE_SELF)  # type: ignore[attr-defined]
+                getrusage = getattr(resource, "getrusage", None)
+                RUSAGE_SELF = getattr(resource, "RUSAGE_SELF", None)
+                if getrusage is not None and RUSAGE_SELF is not None:
+                    ru = getrusage(RUSAGE_SELF)
                 # ru_maxrss is KiB on Linux, bytes on macOS
                 maxrss = ru.ru_maxrss
                 if sys.platform == "darwin":

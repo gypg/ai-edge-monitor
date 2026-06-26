@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ai-edge-monitor"
-version = "0.1.0"
-description = "AI-assisted lightweight monitoring for embedded edge devices (Jetson / Raspberry Pi / x86 edge)."
+version = "2.0.0"
+description = "AI inference deployment performance assessment system for edge devices — can this device run this model? How fast? Where's the bottleneck? How to optimize?"
 readme = "README.md"
 requires-python = ">=3.8"
 license = { text = "Proprietary" }

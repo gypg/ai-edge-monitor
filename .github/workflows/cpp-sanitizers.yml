@@ -77,14 +77,7 @@ jobs:
 
       - name: run cppcheck
         run: |
-          cppcheck --enable=all --suppress=missingIncludeSystem \
-            --suppress=unusedPrivateFunction \
-            --suppress=redundantInitialization \
-            --suppress=knownConditionTrueFalse \
-            --suppress=stlIfStrFind \
-            --suppress=unusedStructMember \
-            --suppress=unsignedPositive \
-            --suppress=constVariableReference \
-            --suppress=useStlAlgorithm \
+          cppcheck --enable=warning,performance,portability,information \
+            --suppress=missingIncludeSystem \
             --error-exitcode=1 --inline-suppr \
             cpp_src/

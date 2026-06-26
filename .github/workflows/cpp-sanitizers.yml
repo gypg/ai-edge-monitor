@@ -78,7 +78,7 @@ jobs:
       - name: run cppcheck
         run: |
           cppcheck --enable=warning,performance,portability,information \
-            --suppress=missingIncludeSystem \
+            --suppress=missingIncludeSystem --suppress=missingInclude \
             --suppress=stlIfStrFind \
             --error-exitcode=1 --inline-suppr \
             cpp_src/

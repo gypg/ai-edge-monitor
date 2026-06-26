@@ -34,7 +34,7 @@ _ENV_MAPPING = {
 }
 
 # 配置验证规则
-_VALIDATION_RULES = {
+_VALIDATION_RULES: Dict[str, Dict[str, Any]] = {
     "duration_sec": {
         "type": int,
         "min": 1,

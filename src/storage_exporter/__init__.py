@@ -132,7 +132,7 @@ class JsonlExporter:
     def _cleanup_old_files(self) -> None:
         """清理旧文件"""
         # 获取所有轮转文件
-        rotated_files = []
+        rotated_files: List[Path] = []
         for pattern in ["metrics_*.jsonl", "metrics_*.jsonl.gz"]:
             rotated_files.extend(self.output_dir.glob(pattern))
         

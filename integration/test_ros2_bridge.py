@@ -1,4 +1,4 @@
-"""Integration tests for ROS2 bridge — Phase 4.
+"""Integration tests for ROS2 bridge -- Phase 4.
 
 Verifies that MonitorNode works as a no-op when ROS2 is unavailable and
 that metric message format is correct (with rclpy mocked).
@@ -11,8 +11,6 @@ import types
 import unittest
 from pathlib import Path
 from unittest import mock
-
-import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
@@ -45,7 +43,7 @@ _MOCK_MODULES = {
 
 
 # ---------------------------------------------------------------------------
-# MonitorNode stub — simulated implementation for force_dummy testing.
+# MonitorNode stub -- simulated implementation for force_dummy testing.
 # ---------------------------------------------------------------------------
 # The actual ROS2 node module may not exist yet (Phase 4 deliverable).  We
 # build a lightweight stub that mirrors the expected interface so integration
@@ -129,28 +127,14 @@ class _MonitorNodeStub:
 # Tests
 # ---------------------------------------------------------------------------
 
-@pytest.fixture()
-def _inject_fake_ros2():
-    """Temporarily inject fake ROS2 modules so stub thinks rclpy exists."""
-    saved: dict = {}
-    for name, mod in _MOCK_MODULES.items():
-        saved[name] = sys.modules.get(name)
-        sys.modules[name] = mod
-    yield
-    for name, original in saved.items():
-        if original is None:
-            sys.modules.pop(name, None)
-        else:
-            sys.modules[name] = original
 
-
-class TestMonitorNodeStub:
-    """test_ros2_node_stub — verify MonitorNode works as no-op without ROS2."""
+class TestMonitorNodeStub(unittest.TestCase):
+    """test_ros2_node_stub -- verify MonitorNode works as no-op without ROS2."""
 
     def test_stub_instantiates_without_ros2(self):
         """The stub must not crash when rclpy is absent."""
         node = _MonitorNodeStub(force_dummy=True)
-        assert node.ros2_available is False or isinstance(node.ros2_available, bool)
+        self.assertTrue(node.ros2_available is False or isinstance(node.ros2_available, bool))
 
     def test_stub_has_noop_publish_when_no_ros2(self):
         """publish_snapshot must not raise even without ROS2."""
@@ -162,18 +146,32 @@ class TestMonitorNodeStub:
     def test_stub_exposes_expected_topics(self):
         """TOPICS must contain the four system metric channels."""
         expected = {"cpu_percent", "memory_percent", "power_watt", "temperature_c"}
-        assert expected == set(_MonitorNodeStub.TOPICS.keys())
+        self.assertEqual(expected, set(_MonitorNodeStub.TOPICS.keys()))
 
     def test_stub_exposes_inference_topics(self):
         """INFERENCE_TOPICS must contain fps, latency, gpu_util."""
         expected = {"fps", "latency", "gpu_util"}
-        assert expected == set(_MonitorNodeStub.INFERENCE_TOPICS.keys())
+        self.assertEqual(expected, set(_MonitorNodeStub.INFERENCE_TOPICS.keys()))
 
 
-class TestMetricsPublishStructure:
-    """test_metrics_publish_structure — mock rclpy, verify message format."""
+class TestMetricsPublishStructure(unittest.TestCase):
+    """test_metrics_publish_structure -- mock rclpy, verify message format."""
 
-    def test_publish_creates_float64_messages(self, _inject_fake_ros2):
+    def setUp(self):
+        """Temporarily inject fake ROS2 modules so stub thinks rclpy exists."""
+        self._saved: dict = {}
+        for name, mod in _MOCK_MODULES.items():
+            self._saved[name] = sys.modules.get(name)
+            sys.modules[name] = mod
+
+    def tearDown(self):
+        for name, original in self._saved.items():
+            if original is None:
+                sys.modules.pop(name, None)
+            else:
+                sys.modules[name] = original
+
+    def test_publish_creates_float64_messages(self):
         """Each published message must be a Float64 with numeric .data."""
         node = _MonitorNodeStub(force_dummy=True)
         node.publish_snapshot({
@@ -183,11 +181,11 @@ class TestMetricsPublishStructure:
             "temperature_c": 45.0,
         })
         # All four topics should have received one message each.
-        assert len(node._published) == 4
+        self.assertEqual(len(node._published), 4)
         for topic, msg in node._published:
-            assert isinstance(msg.data, float), f"msg.data for {topic} must be float"
+            self.assertIsInstance(msg.data, float, f"msg.data for {topic} must be float")
 
-    def test_publish_skips_none_values(self, _inject_fake_ros2):
+    def test_publish_skips_none_values(self):
         """Keys with None values must not produce a message."""
         node = _MonitorNodeStub(force_dummy=True)
         node.publish_snapshot({
@@ -196,10 +194,10 @@ class TestMetricsPublishStructure:
             "power_watt": None,
             "temperature_c": None,
         })
-        assert len(node._published) == 1
-        assert node._published[0][0] == "/system/cpu_percent"
+        self.assertEqual(len(node._published), 1)
+        self.assertEqual(node._published[0][0], "/system/cpu_percent")
 
-    def test_inference_publish_structure(self, _inject_fake_ros2):
+    def test_inference_publish_structure(self):
         """Inference messages follow the same Float64 contract."""
         node = _MonitorNodeStub(force_dummy=True)
         node.publish_inference({
@@ -207,10 +205,10 @@ class TestMetricsPublishStructure:
             "latency": 12.3,
             "gpu_util": 85.0,
         })
-        assert len(node._published) == 3
+        self.assertEqual(len(node._published), 3)
         topics = {t for t, _ in node._published}
-        assert topics == {"/inference/fps", "/inference/latency", "/inference/gpu_util"}
+        self.assertEqual(topics, {"/inference/fps", "/inference/latency", "/inference/gpu_util"})
 
 
 if __name__ == "__main__":
-    pytest.main([__file__, "-v"])
+    unittest.main()

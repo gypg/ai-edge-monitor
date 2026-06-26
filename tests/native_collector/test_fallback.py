@@ -3,38 +3,40 @@
 from __future__ import annotations
 
 import sys
-
-import pytest
-
-
-def test_import_does_not_crash():
-    """Importing native_collector must succeed on any platform."""
-    import native_collector  # noqa: F401
+import unittest
 
 
-def test_has_native_false_on_windows():
-    """On Windows there is no compiled .so/.pyd, so HAS_NATIVE is False."""
-    if sys.platform == "win32":
-        from native_collector import HAS_NATIVE
+class TestNativeCollector(unittest.TestCase):
 
-        assert HAS_NATIVE is False
+    def test_import_does_not_crash(self) -> None:
+        """Importing native_collector must succeed on any platform."""
+        import native_collector  # noqa: F401
+
+    def test_has_native_false_on_windows(self) -> None:
+        """On Windows there is no compiled .so/.pyd, so HAS_NATIVE is False."""
+        if sys.platform == "win32":
+            from native_collector import HAS_NATIVE
+            self.assertFalse(HAS_NATIVE)
+
+    def test_select_probe_returns_python_probe(self) -> None:
+        """select_probe() without force_native returns a Python-based probe."""
+        from native_collector import select_probe
+
+        probe = select_probe()
+        # Should have a read_metrics method (PlatformProbe interface)
+        self.assertTrue(hasattr(probe, "read_metrics"))
+
+    def test_select_probe_force_native_raises(self) -> None:
+        """force_native=True must raise ImportError when native module is absent."""
+        from native_collector import HAS_NATIVE, select_probe
+
+        if HAS_NATIVE:
+            self.skipTest("Native module is available; cannot test ImportError path")
+
+        with self.assertRaises(ImportError) as cm:
+            select_probe(force_native=True)
+        self.assertIn("Native collector not available", str(cm.exception))
 
 
-def test_select_probe_returns_python_probe():
-    """select_probe() without force_native returns a Python-based probe."""
-    from native_collector import select_probe
-
-    probe = select_probe()
-    # Should have a read_metrics method (PlatformProbe interface)
-    assert hasattr(probe, "read_metrics")
-
-
-def test_select_probe_force_native_raises():
-    """force_native=True must raise ImportError when native module is absent."""
-    from native_collector import HAS_NATIVE, select_probe
-
-    if HAS_NATIVE:
-        pytest.skip("Native module is available; cannot test ImportError path")
-
-    with pytest.raises(ImportError, match="Native collector not available"):
-        select_probe(force_native=True)
+if __name__ == "__main__":
+    unittest.main()

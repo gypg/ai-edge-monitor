@@ -1,4 +1,4 @@
-"""Integration: Memory diagnostics — leak detection and debug bundles.
+"""Integration: Memory diagnostics -- leak detection and debug bundles.
 
 Tests:
     test_leak_detector_end_to_end
@@ -17,11 +17,10 @@ import os
 import sys
 import tempfile
 import time
+import unittest
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
-
-import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
@@ -256,8 +255,8 @@ class DebugBundleGenerator:
 # ---------------------------------------------------------------------------
 
 
-class TestLeakDetectorEndToEnd:
-    """test_leak_detector_end_to_end — synthetic leak data through full pipeline."""
+class TestLeakDetectorEndToEnd(unittest.TestCase):
+    """test_leak_detector_end_to_end -- synthetic leak data through full pipeline."""
 
     def test_leak_detector_end_to_end(self):
         """Feed synthetic linear-growth RSS data through:
@@ -278,17 +277,17 @@ class TestLeakDetectorEndToEnd:
             detector.add_sample(rss)
 
         result = detector.analyze()
-        assert result.is_leaking is True, (
+        self.assertTrue(result.is_leaking, (
             f"Expected leak detected: slope={result.slope_mb_per_sample:.3f}, "
             f"r2={result.r_squared:.3f}"
-        )
-        assert result.slope_mb_per_sample > 0.5, (
+        ))
+        self.assertGreater(result.slope_mb_per_sample, 0.5, (
             f"Slope {result.slope_mb_per_sample:.3f} should exceed threshold 0.5"
-        )
-        assert result.r_squared >= 0.85, (
+        ))
+        self.assertGreaterEqual(result.r_squared, 0.85, (
             f"R^2 {result.r_squared:.3f} should be >= 0.85"
-        )
-        assert result.window_size == 60
+        ))
+        self.assertEqual(result.window_size, 60)
 
     def test_steady_state_no_leak(self):
         """Steady RSS should NOT trigger leak detection."""
@@ -304,9 +303,9 @@ class TestLeakDetectorEndToEnd:
             detector.add_sample(rss)
 
         result = detector.analyze()
-        assert result.is_leaking is False, (
+        self.assertFalse(result.is_leaking, (
             f"Steady state should not flag leak: slope={result.slope_mb_per_sample:.4f}"
-        )
+        ))
 
     def test_leak_detector_through_aggregator(self):
         """Feed leak-like data through AggregatorAnalyzer and verify the
@@ -334,14 +333,14 @@ class TestLeakDetectorEndToEnd:
 
         # Verify the timeline shows growth
         mem_timeline = summary.timeline_mem_used_mb
-        assert len(mem_timeline) >= 50, f"Expected >= 50 timeline points, got {len(mem_timeline)}"
+        self.assertGreaterEqual(len(mem_timeline), 50, f"Expected >= 50 timeline points, got {len(mem_timeline)}")
 
         # First mem value should be significantly less than last
         first_mem = mem_timeline[0]
         last_mem = mem_timeline[-1]
-        assert last_mem > first_mem + 100, (
+        self.assertGreater(last_mem, first_mem + 100, (
             f"Memory should show growth: first={first_mem:.0f}, last={last_mem:.0f}"
-        )
+        ))
 
         # Feed timeline through leak detector
         detector = RSSLeakDetector(window_size=100, slope_threshold_mb=2.0, min_r_squared=0.8)
@@ -349,14 +348,14 @@ class TestLeakDetectorEndToEnd:
             detector.add_sample(mem)
 
         result = detector.analyze()
-        assert result.is_leaking is True, (
+        self.assertTrue(result.is_leaking, (
             f"Growing memory timeline should detect leak: "
             f"slope={result.slope_mb_per_sample:.3f}, r2={result.r_squared:.3f}"
-        )
+        ))
 
 
-class TestDebugBundleFromAlert:
-    """test_debug_bundle_from_alert — trigger alert -> auto-generate debug bundle."""
+class TestDebugBundleFromAlert(unittest.TestCase):
+    """test_debug_bundle_from_alert -- trigger alert -> auto-generate debug bundle."""
 
     def test_debug_bundle_from_alert(self):
         """Set up AlertManager, trigger an alert, then generate a debug bundle."""
@@ -375,11 +374,11 @@ class TestDebugBundleFromAlert:
 
         # Trigger the alert
         alerts = alert_mgr.check_threshold("rss_mb", 150.0)
-        assert len(alerts) >= 1, "Alert should have triggered"
+        self.assertGreaterEqual(len(alerts), 1, "Alert should have triggered")
 
         alert = alerts[0]
-        assert alert.status == AlertStatus.ACTIVE
-        assert alert.severity == AlertSeverity.ERROR
+        self.assertEqual(alert.status, AlertStatus.ACTIVE)
+        self.assertEqual(alert.severity, AlertSeverity.ERROR)
 
         # Generate debug bundle from the alert
         with tempfile.TemporaryDirectory(prefix="debug_bundle_test_") as tmpdir:
@@ -387,46 +386,46 @@ class TestDebugBundleFromAlert:
             bundle = generator.generate(alert)
 
             # Verify bundle contents
-            assert len(bundle.files) == 4, (
+            self.assertEqual(len(bundle.files), 4, (
                 f"Expected 4 bundle files, got {len(bundle.files)}"
-            )
-            assert bundle.total_size_bytes > 0, "Bundle should have non-zero size"
-            assert bundle.generation_time_sec < 1.0, (
+            ))
+            self.assertGreater(bundle.total_size_bytes, 0, "Bundle should have non-zero size")
+            self.assertLess(bundle.generation_time_sec, 1.0, (
                 f"Bundle generation took {bundle.generation_time_sec:.3f}s, should be < 1s"
-            )
+            ))
 
             # Verify all files exist and are non-empty
             for fpath in bundle.files:
-                assert fpath.is_file(), f"Bundle file missing: {fpath}"
-                assert fpath.stat().st_size > 0, f"Bundle file empty: {fpath}"
+                self.assertTrue(fpath.is_file(), f"Bundle file missing: {fpath}")
+                self.assertGreater(fpath.stat().st_size, 0, f"Bundle file empty: {fpath}")
 
             # Verify bundle directory structure
             bundle_dir = Path(tmpdir) / f"bundle_{alert.id}"
-            assert bundle_dir.is_dir(), f"Bundle dir missing: {bundle_dir}"
+            self.assertTrue(bundle_dir.is_dir(), f"Bundle dir missing: {bundle_dir}")
 
             # Verify specific files
             status_file = bundle_dir / "process_status.txt"
-            assert status_file.is_file()
+            self.assertTrue(status_file.is_file())
             status_content = status_file.read_text(encoding="utf-8")
-            assert "VmRSS" in status_content
-            assert "Alert" in status_content
+            self.assertIn("VmRSS", status_content)
+            self.assertIn("Alert", status_content)
 
             maps_file = bundle_dir / "memory_maps.txt"
-            assert maps_file.is_file()
+            self.assertTrue(maps_file.is_file())
             maps_content = maps_file.read_text(encoding="utf-8")
-            assert "heap" in maps_content or "stack" in maps_content
+            self.assertTrue("heap" in maps_content or "stack" in maps_content)
 
             context_file = bundle_dir / "alert_context.json"
-            assert context_file.is_file()
+            self.assertTrue(context_file.is_file())
             context_data = json.loads(context_file.read_text(encoding="utf-8"))
-            assert "alert" in context_data
-            assert "pid" in context_data
-            assert context_data["alert"]["rule_name"] == "high_memory"
+            self.assertIn("alert", context_data)
+            self.assertIn("pid", context_data)
+            self.assertEqual(context_data["alert"]["rule_name"], "high_memory")
 
             # Verify total size < 10MB (acceptance criteria)
-            assert bundle.total_size_bytes < 10 * 1024 * 1024, (
+            self.assertLess(bundle.total_size_bytes, 10 * 1024 * 1024, (
                 f"Bundle size {bundle.total_size_bytes} exceeds 10MB limit"
-            )
+            ))
 
     def test_multiple_alerts_generate_separate_bundles(self):
         """Multiple alerts should each get their own debug bundle."""
@@ -457,7 +456,7 @@ class TestDebugBundleFromAlert:
         temp_alerts = alert_mgr.check_threshold("temperature_c", 95.0)
 
         all_alerts = cpu_alerts + temp_alerts
-        assert len(all_alerts) >= 2, f"Expected >= 2 alerts, got {len(all_alerts)}"
+        self.assertGreaterEqual(len(all_alerts), 2, f"Expected >= 2 alerts, got {len(all_alerts)}")
 
         with tempfile.TemporaryDirectory(prefix="multi_bundle_test_") as tmpdir:
             generator = DebugBundleGenerator(output_dir=Path(tmpdir))
@@ -466,9 +465,13 @@ class TestDebugBundleFromAlert:
             # Each bundle should have its own directory
             bundle_dirs = set()
             for bundle in bundles:
-                assert len(bundle.files) == 4
+                self.assertEqual(len(bundle.files), 4)
                 bundle_dirs.add(bundle.files[0].parent)
 
-            assert len(bundle_dirs) == len(all_alerts), (
+            self.assertEqual(len(bundle_dirs), len(all_alerts), (
                 f"Expected {len(all_alerts)} unique bundle dirs, got {len(bundle_dirs)}"
-            )
+            ))
+
+
+if __name__ == "__main__":
+    unittest.main()

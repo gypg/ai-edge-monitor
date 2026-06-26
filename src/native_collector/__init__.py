@@ -12,13 +12,13 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 try:
-    from _native_collector import NativeProbe, NeonStats  # type: ignore[import-untyped]
+    from _native_collector import NativeProbe, NeonStats
 
     HAS_NATIVE = True
 except ImportError:
     HAS_NATIVE = False
-    NativeProbe = None  # type: ignore[assignment,misc]
-    NeonStats = None  # type: ignore[assignment,misc]
+    NativeProbe = None
+    NeonStats = None
 
 
 def select_probe(force_native: bool = False) -> Any:

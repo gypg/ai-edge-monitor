@@ -15,10 +15,9 @@ from __future__ import annotations
 
 import sys
 import time
+import unittest
 from pathlib import Path
 from typing import List
-
-import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
@@ -45,7 +44,7 @@ def _build_inference_results_from_scenario(
     """Simulate an inference monitoring session driven by a scenario.
 
     Collects latency samples and returns an InferenceResults dataclass
-    without needing a real InferenceMonitor class — this exercises the
+    without needing a real InferenceMonitor class -- this exercises the
     results and scorer modules in integration with the scenario engine.
     """
     latencies: List[float] = []
@@ -105,8 +104,8 @@ def _build_raw_metrics_from_scenario(
 # ---------------------------------------------------------------------------
 
 
-class TestInferenceMonitorDummyMode:
-    """test_inference_monitor_dummy_mode — run with dummy probe, verify results."""
+class TestInferenceMonitorDummyMode(unittest.TestCase):
+    """test_inference_monitor_dummy_mode -- run with dummy probe, verify results."""
 
     def test_inference_monitor_dummy_mode(self):
         scenario = make_scenario("inference", seed=42)
@@ -115,22 +114,22 @@ class TestInferenceMonitorDummyMode:
         )
 
         # Basic sanity: results are populated
-        assert results.total_inferences > 0, "No inferences recorded"
-        assert results.fps > 0, "FPS should be positive"
-        assert results.latency_p50_ms >= 0
-        assert results.latency_p95_ms >= results.latency_p50_ms
-        assert results.latency_p99_ms >= results.latency_p95_ms
-        assert results.framework == "dummy"
-        assert results.model_path == "dummy/model.onnx"
+        self.assertGreater(results.total_inferences, 0, "No inferences recorded")
+        self.assertGreater(results.fps, 0, "FPS should be positive")
+        self.assertGreaterEqual(results.latency_p50_ms, 0)
+        self.assertGreaterEqual(results.latency_p95_ms, results.latency_p50_ms)
+        self.assertGreaterEqual(results.latency_p99_ms, results.latency_p95_ms)
+        self.assertEqual(results.framework, "dummy")
+        self.assertEqual(results.model_path, "dummy/model.onnx")
 
         # Power and temperature populated from our dummy session
-        assert results.power_avg_watt is not None
-        assert results.power_avg_watt > 0
-        assert results.temperature_peak_c is not None
+        self.assertIsNotNone(results.power_avg_watt)
+        self.assertGreater(results.power_avg_watt, 0)
+        self.assertIsNotNone(results.temperature_peak_c)
 
 
-class TestInferenceMonitorWithAggregator:
-    """test_inference_monitor_with_aggregator — feed inference data into aggregator."""
+class TestInferenceMonitorWithAggregator(unittest.TestCase):
+    """test_inference_monitor_with_aggregator -- feed inference data into aggregator."""
 
     def test_inference_monitor_with_aggregator(self):
         scenario = make_scenario("inference", seed=7)
@@ -143,25 +142,24 @@ class TestInferenceMonitorWithAggregator:
             analyzer.ingest_metrics(raw)
 
         summary = analyzer.get_summary()
-        assert summary.sample_count_metrics == 20, (
+        self.assertEqual(summary.sample_count_metrics, 20, (
             f"Expected 20 metrics, got {summary.sample_count_metrics}"
-        )
+        ))
 
         # InferenceScenario targets ~75% CPU
-        assert summary.cpu_avg is not None
-        assert 50.0 <= summary.cpu_avg <= 100.0, (
-            f"Inference scenario cpu_avg {summary.cpu_avg} outside expected range"
-        )
+        self.assertIsNotNone(summary.cpu_avg)
+        self.assertGreaterEqual(summary.cpu_avg, 50.0)
+        self.assertLessEqual(summary.cpu_avg, 100.0)
 
-        assert summary.mem_used_avg_mb is not None
-        assert summary.mem_used_avg_mb > 0
+        self.assertIsNotNone(summary.mem_used_avg_mb)
+        self.assertGreater(summary.mem_used_avg_mb, 0)
 
         # Temperature should be populated (scenario provides it)
-        assert summary.temp_max_c is not None
+        self.assertIsNotNone(summary.temp_max_c)
 
         # Timelines should have data
-        assert len(summary.timeline_cpu) > 0
-        assert len(summary.timeline_ts_ms) == len(summary.timeline_cpu)
+        self.assertGreater(len(summary.timeline_cpu), 0)
+        self.assertEqual(len(summary.timeline_ts_ms), len(summary.timeline_cpu))
 
     def test_scorer_with_real_summary(self):
         """Use AggregatorAnalyzer.get_summary_dict() as scorer input."""
@@ -197,15 +195,21 @@ class TestInferenceMonitorWithAggregator:
         )
 
         # Score should be in valid range
-        assert 0 <= score.total <= 100, f"Score {score.total} out of range"
-        assert score.verdict in ("ready", "marginal", "not_ready")
+        self.assertGreaterEqual(score.total, 0)
+        self.assertLessEqual(score.total, 100, f"Score {score.total} out of range")
+        self.assertIn(score.verdict, ("ready", "marginal", "not_ready"))
 
         # All four sub-scores present and in range
         for attr in ("fps_score", "latency_score", "thermal_score", "power_score"):
             val = getattr(score, attr)
-            assert 0 <= val <= 100, f"{attr} = {val} out of range"
+            self.assertGreaterEqual(val, 0)
+            self.assertLessEqual(val, 100, f"{attr} = {val} out of range")
 
         # With good targets met, verdict should be ready
-        assert score.total >= 50, (
+        self.assertGreaterEqual(score.total, 50, (
             f"Expected decent score with targets met, got {score.total}"
-        )
+        ))
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -16,9 +16,9 @@ try:
     HAS_ROS2 = True
 except ImportError:
     HAS_ROS2 = False
-    RclNode = object  # type: ignore[assignment,misc]
-    Float64 = None  # type: ignore[assignment]
-    String = None  # type: ignore[assignment]
+    RclNode = object
+    Float64 = None
+    String = None
 
 
 _SYSTEM_TOPICS: Dict[str, str] = {

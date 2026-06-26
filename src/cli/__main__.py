@@ -13,6 +13,12 @@ from config_manager import load_config
 from scenarios import make_scenario
 from visualizer import plot_report
 
+
+def _platform_prefer(device: str) -> Tuple[str, ...]:
+    if device == "nvidia-smi":
+        return ("nvidia-smi", "procfs", "psutil")
+    return ("procfs", "psutil")
+
 DEFAULT_DURATION_SEC = 30
 DEFAULT_INTERVAL_MS = 1000
 DEFAULT_OUTPUT_DIR = "reports/demo"

@@ -292,7 +292,9 @@ class CrashHandler:
         """Create a closure for the given signal number."""
         pid = self._pid  # capture for closure
 
-        def _handler(signum, frame):
+        def _handler(signum: int, frame: Any) -> None:
+            if pid is None:
+                return
             LOG.warning("Caught signal %s for pid %s; generating bundle", signum, pid)
             try:
                 bundle_dir = generate_debug_bundle(pid, Path.cwd())

@@ -73,9 +73,9 @@ class SystemMonitor:
     def __init__(self, collect_interval_ms: int = 1000):
         self.collect_interval_ms = collect_interval_ms
         self._enabled = _PSUTIL_OK
-        self._prev_net_io = None
-        self._prev_disk_io = None
-        self._prev_time = None
+        self._prev_net_io: Optional[NetworkIO] = None
+        self._prev_disk_io: Optional[DiskIO] = None
+        self._prev_time: Optional[float] = None
         
         if not self._enabled:
             print("Warning: psutil not available, system monitoring disabled")
@@ -229,7 +229,7 @@ class SystemMonitor:
     
     def collect_system_summary(self) -> Dict[str, Any]:
         """收集系统摘要信息"""
-        summary = {
+        summary: Dict[str, Any] = {
             "timestamp_ms": int(time.time() * 1000),
             "enabled": self._enabled,
         }
@@ -277,11 +277,12 @@ class SystemMonitor:
     
     def format_bytes(self, bytes_value: int) -> str:
         """格式化字节数为可读字符串"""
+        val = float(bytes_value)
         for unit in ['B', 'KB', 'MB', 'GB', 'TB']:
-            if bytes_value < 1024.0:
-                return f"{bytes_value:.2f} {unit}"
-            bytes_value /= 1024.0
-        return f"{bytes_value:.2f} PB"
+            if val < 1024.0:
+                return f"{val:.2f} {unit}"
+            val /= 1024.0
+        return f"{val:.2f} PB"
 
 
 # 便捷函数

@@ -6,7 +6,7 @@ Covers:
 - Empty profiler behaviour
 - Graceful fallback when tensorrt is unavailable
 
-All tests run without an actual TensorRT installation — the
+All tests run without an actual TensorRT installation -- the
 ``tensorrt`` import is either unavailable (natural on CI / dev
 machines) or mocked via ``unittest.mock``.
 """
@@ -16,10 +16,9 @@ from __future__ import annotations
 import logging
 import sys
 import types
+import unittest
 from pathlib import Path
 from unittest import mock
-
-import pytest
 
 # ---------------------------------------------------------------------------
 # Ensure ``src/`` is on sys.path so inference_monitor resolves correctly
@@ -32,7 +31,7 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 # ---------------------------------------------------------------------------
-# Import the module under test — works regardless of whether tensorrt is
+# Import the module under test -- works regardless of whether tensorrt is
 # installed because the bridge itself handles ImportError.
 # ---------------------------------------------------------------------------
 
@@ -48,7 +47,7 @@ from inference_monitor.tensorrt_bridge import (
 # ---------------------------------------------------------------------------
 
 
-class TestProfilerRecordsLayers:
+class TestProfilerRecordsLayers(unittest.TestCase):
     """report_layer_time captures per-layer execution data."""
 
     def test_profiler_records_layers(self) -> None:
@@ -61,15 +60,15 @@ class TestProfilerRecordsLayers:
         profiler.report_layer_time("relu1", 0.5)
 
         profiles = profiler.get_layer_profiles()
-        assert len(profiles) == 2
+        self.assertEqual(len(profiles), 2)
 
         by_name = {p.name: p for p in profiles}
 
-        assert by_name["conv1"].calls == 2
-        assert by_name["conv1"].avg_time_ms == pytest.approx(1.3)
+        self.assertEqual(by_name["conv1"].calls, 2)
+        self.assertAlmostEqual(by_name["conv1"].avg_time_ms, 1.3)
 
-        assert by_name["relu1"].calls == 2
-        assert by_name["relu1"].avg_time_ms == pytest.approx(0.4)
+        self.assertEqual(by_name["relu1"].calls, 2)
+        self.assertAlmostEqual(by_name["relu1"].avg_time_ms, 0.4)
 
     def test_profiler_layers_sorted_by_name(self) -> None:
         profiler = TensorRTProfiler()
@@ -77,19 +76,19 @@ class TestProfilerRecordsLayers:
         profiler.report_layer_time("a_layer", 2.0)
 
         names = [p.name for p in profiler.get_layer_profiles()]
-        assert names == sorted(names)
+        self.assertEqual(names, sorted(names))
 
     def test_layer_profile_is_frozen(self) -> None:
         """LayerProfile is an immutable dataclass."""
         profiler = TensorRTProfiler()
         profiler.report_layer_time("conv", 1.0)
         profile = profiler.get_layer_profiles()[0]
-        assert isinstance(profile, LayerProfile)
-        with pytest.raises(AttributeError):
+        self.assertEqual(type(profile).__name__, "LayerProfile")
+        with self.assertRaises(AttributeError):
             profile.name = "changed"  # type: ignore[misc]
 
 
-class TestProfilerTotalTime:
+class TestProfilerTotalTime(unittest.TestCase):
     """get_total_time_ms returns the sum of all layer times."""
 
     def test_profiler_total_time(self) -> None:
@@ -99,77 +98,77 @@ class TestProfilerTotalTime:
         profiler.report_layer_time("conv1", 1.4)
         profiler.report_layer_time("relu1", 0.5)
 
-        assert profiler.get_total_time_ms() == pytest.approx(3.4)
+        self.assertAlmostEqual(profiler.get_total_time_ms(), 3.4)
 
     def test_total_time_single_layer(self) -> None:
         profiler = TensorRTProfiler()
         profiler.report_layer_time("only", 5.0)
-        assert profiler.get_total_time_ms() == pytest.approx(5.0)
+        self.assertAlmostEqual(profiler.get_total_time_ms(), 5.0)
 
 
-class TestProfilerEmpty:
+class TestProfilerEmpty(unittest.TestCase):
     """Empty profiler returns sensible defaults."""
 
     def test_profiler_empty(self) -> None:
         profiler = TensorRTProfiler()
 
-        assert profiler.get_layer_profiles() == []
-        assert profiler.get_total_time_ms() == 0.0
+        self.assertEqual(profiler.get_layer_profiles(), [])
+        self.assertEqual(profiler.get_total_time_ms(), 0.0)
 
     def test_reset_clears_data(self) -> None:
         profiler = TensorRTProfiler()
         profiler.report_layer_time("conv", 1.0)
         profiler.reset()
 
-        assert profiler.get_layer_profiles() == []
-        assert profiler.get_total_time_ms() == 0.0
+        self.assertEqual(profiler.get_layer_profiles(), [])
+        self.assertEqual(profiler.get_total_time_ms(), 0.0)
 
 
-class TestImportFallback:
+class TestImportFallback(unittest.TestCase):
     """Verify graceful degradation when tensorrt is not installed."""
 
     def test_import_fallback_module_loads(self) -> None:
         """The module must always importable regardless of tensorrt."""
-        # If we got here, the import at module top succeeded — that's the test.
-        assert TensorRTProfiler is not None
+        # If we got here, the import at module top succeeded -- that's the test.
+        self.assertIsNotNone(TensorRTProfiler)
 
     def test_import_fallback_profiler_is_noop(self) -> None:
         """When HAS_TENSORRT is False the profiler still works as a no-op."""
         if HAS_TENSORRT:
-            pytest.skip("tensorrt is installed; cannot test fallback path")
+            self.skipTest("tensorrt is installed; cannot test fallback path")
 
         profiler = TensorRTProfiler()
         # Should not raise, and should produce empty results
-        assert profiler.get_layer_profiles() == []
-        assert profiler.get_total_time_ms() == 0.0
+        self.assertEqual(profiler.get_layer_profiles(), [])
+        self.assertEqual(profiler.get_total_time_ms(), 0.0)
 
         # report_layer_time still works (records data locally)
         profiler.report_layer_time("test_layer", 1.5)
-        assert len(profiler.get_layer_profiles()) == 1
+        self.assertEqual(len(profiler.get_layer_profiles()), 1)
 
-    def test_import_fallback_logs_warning(self, caplog: pytest.LogCaptureFixture) -> None:
+    def test_import_fallback_logs_warning(self) -> None:
         """First use in no-TensorRT mode logs a WARNING."""
         if HAS_TENSORRT:
-            pytest.skip("tensorrt is installed; cannot test fallback path")
+            self.skipTest("tensorrt is installed; cannot test fallback path")
 
         profiler = TensorRTProfiler()
-        with caplog.at_level(logging.WARNING, logger="inference_monitor.tensorrt_bridge"):
+        with self.assertLogs("inference_monitor.tensorrt_bridge", level=logging.WARNING) as cm:
             profiler.report_layer_time("layer", 0.1)
 
-        assert any("TensorRT not available" in msg for msg in caplog.messages)
+        self.assertTrue(any("TensorRT not available" in msg for msg in cm.output))
 
-    def test_warning_only_once(self, caplog: pytest.LogCaptureFixture) -> None:
+    def test_warning_only_once(self) -> None:
         """The no-TensorRT warning is emitted only on the first call."""
         if HAS_TENSORRT:
-            pytest.skip("tensorrt is installed; cannot test fallback path")
+            self.skipTest("tensorrt is installed; cannot test fallback path")
 
         profiler = TensorRTProfiler()
-        with caplog.at_level(logging.WARNING, logger="inference_monitor.tensorrt_bridge"):
+        with self.assertLogs("inference_monitor.tensorrt_bridge", level=logging.WARNING) as cm:
             profiler.report_layer_time("a", 0.1)
             profiler.report_layer_time("b", 0.2)
 
-        trt_warnings = [m for m in caplog.messages if "TensorRT not available" in m]
-        assert len(trt_warnings) == 1
+        trt_warnings = [m for m in cm.output if "TensorRT not available" in m]
+        self.assertEqual(len(trt_warnings), 1)
 
     def test_import_fallback_with_mock(self) -> None:
         """Simulate tensorrt being unavailable by reloading with a blocked import."""
@@ -182,14 +181,14 @@ class TestImportFallback:
         sys.modules["tensorrt"] = None  # type: ignore[assignment]
         try:
             reloaded = importlib.reload(mod)
-            assert reloaded.HAS_TENSORRT is False
+            self.assertFalse(reloaded.HAS_TENSORRT)
 
             profiler = reloaded.TensorRTProfiler()
             profiler.report_layer_time("mocked_layer", 2.5)
             profiles = profiler.get_layer_profiles()
-            assert len(profiles) == 1
-            assert profiles[0].name == "mocked_layer"
-            assert profiles[0].avg_time_ms == pytest.approx(2.5)
+            self.assertEqual(len(profiles), 1)
+            self.assertEqual(profiles[0].name, "mocked_layer")
+            self.assertAlmostEqual(profiles[0].avg_time_ms, 2.5)
         finally:
             # Restore original state
             if original_trt is not None:
@@ -197,3 +196,7 @@ class TestImportFallback:
             else:
                 sys.modules.pop("tensorrt", None)
             importlib.reload(mod)
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -18,11 +18,10 @@ from __future__ import annotations
 import json
 import sys
 import time
+import unittest
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
-
-import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
@@ -76,7 +75,7 @@ class SimpleAIAdvisor:
                 "check": lambda s: (s.get("temp_max_c") or 0) > 75,
                 "severity": "error",
                 "category": "thermal",
-                "msg": "Temperature {temp_max_c:.1f}C exceeds 75C — throttle risk",
+                "msg": "Temperature {temp_max_c:.1f}C exceeds 75C -- throttle risk",
                 "suggestion": "Improve cooling or reduce inference batch size",
             },
             {
@@ -101,7 +100,7 @@ class SimpleAIAdvisor:
                 and (s.get("temp_max_c") or 0) > 70,
                 "severity": "error",
                 "category": "performance",
-                "msg": "High CPU + high temp — likely thermal throttling",
+                "msg": "High CPU + high temp -- likely thermal throttling",
                 "suggestion": "Reduce inference concurrency",
             },
         ]
@@ -184,8 +183,8 @@ def _run_scenario_to_analyzer(
 # ---------------------------------------------------------------------------
 
 
-class TestAdvisorIdleScenario:
-    """test_advisor_idle_scenario — idle 10s, 0 diagnoses expected."""
+class TestAdvisorIdleScenario(unittest.TestCase):
+    """test_advisor_idle_scenario -- idle 10s, 0 diagnoses expected."""
 
     def test_advisor_idle_scenario(self):
         scenario = make_scenario("idle", seed=10)
@@ -193,20 +192,20 @@ class TestAdvisorIdleScenario:
         summary = analyzer.get_summary_dict()
 
         advisor = SimpleAIAdvisor()
-        assert advisor.rule_count >= 5, f"Expected >= 5 rules, got {advisor.rule_count}"
+        self.assertGreaterEqual(advisor.rule_count, 5, f"Expected >= 5 rules, got {advisor.rule_count}")
 
         diagnoses = advisor.diagnose(summary)
 
         # Idle scenario: low CPU (~5%), low temp (~38C), low power (~2W)
         # Should trigger 0 diagnoses
-        assert len(diagnoses) == 0, (
+        self.assertEqual(len(diagnoses), 0, (
             f"Idle scenario should have 0 diagnoses, got {len(diagnoses)}: "
             + ", ".join(d.rule_name for d in diagnoses)
-        )
+        ))
 
 
-class TestAdvisorThrottledScenario:
-    """test_advisor_throttled_scenario — throttled 10s, >=1 diagnosis."""
+class TestAdvisorThrottledScenario(unittest.TestCase):
+    """test_advisor_throttled_scenario -- throttled 10s, >=1 diagnosis."""
 
     def test_advisor_throttled_scenario(self):
         scenario = make_scenario("throttled", seed=20)
@@ -222,22 +221,22 @@ class TestAdvisorThrottledScenario:
 
         # Throttled scenario: CPU ramps to 95%, temp crosses 80C
         # Should trigger >= 1 diagnosis
-        assert len(diagnoses) >= 1, (
+        self.assertGreaterEqual(len(diagnoses), 1, (
             f"Throttled scenario should have >=1 diagnosis, got {len(diagnoses)}. "
             f"Summary: cpu_avg={summary.get('cpu_avg')}, temp_max={summary.get('temp_max_c')}"
-        )
+        ))
 
         # Each diagnosis should have required fields
         for d in diagnoses:
-            assert d.rule_name, "Diagnosis missing rule_name"
-            assert d.category, "Diagnosis missing category"
-            assert d.severity in ("info", "warning", "error", "critical")
-            assert d.suggestion, "Diagnosis missing suggestion"
-            assert isinstance(d.evidence, dict)
+            self.assertTrue(d.rule_name, "Diagnosis missing rule_name")
+            self.assertTrue(d.category, "Diagnosis missing category")
+            self.assertIn(d.severity, ("info", "warning", "error", "critical"))
+            self.assertTrue(d.suggestion, "Diagnosis missing suggestion")
+            self.assertIsInstance(d.evidence, dict)
 
 
-class TestAdvisorWithWebDashboard:
-    """test_advisor_with_web_dashboard — /api/diagnosis returns valid data."""
+class TestAdvisorWithWebDashboard(unittest.TestCase):
+    """test_advisor_with_web_dashboard -- /api/diagnosis returns valid data."""
 
     def test_advisor_with_web_dashboard(self):
         # Build a context with alert manager and summary provider
@@ -267,15 +266,15 @@ class TestAdvisorWithWebDashboard:
 
         # Test /api/summary endpoint
         result = handle_summary("/api/summary", {}, ctx)
-        assert "error" not in result or result.get("error") is None
-        assert "cpu_avg" in result
-        assert "ts_ms" in result
+        self.assertTrue("error" not in result or result.get("error") is None)
+        self.assertIn("cpu_avg", result)
+        self.assertIn("ts_ms", result)
 
         # Test /api/alerts endpoint
         alerts_result = handle_alerts("/api/alerts", {}, ctx)
-        assert "active_alerts" in alerts_result
-        assert "alert_history" in alerts_result
-        assert "stats" in alerts_result
+        self.assertIn("active_alerts", alerts_result)
+        self.assertIn("alert_history", alerts_result)
+        self.assertIn("stats", alerts_result)
 
         # Run advisor diagnosis and verify results are JSON-serializable
         diagnoses = advisor.diagnose(summary_dict)
@@ -296,9 +295,13 @@ class TestAdvisorWithWebDashboard:
 
         # Must be JSON-serializable (web dashboard requirement)
         json_str = json.dumps(diagnosis_payload, ensure_ascii=False)
-        assert len(json_str) > 0
+        self.assertGreater(len(json_str), 0)
 
         parsed = json.loads(json_str)
-        assert "diagnoses" in parsed
-        assert "summary" in parsed
-        assert isinstance(parsed["diagnoses"], list)
+        self.assertIn("diagnoses", parsed)
+        self.assertIn("summary", parsed)
+        self.assertIsInstance(parsed["diagnoses"], list)
+
+
+if __name__ == "__main__":
+    unittest.main()

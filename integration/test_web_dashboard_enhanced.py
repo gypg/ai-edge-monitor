@@ -1,4 +1,4 @@
-"""Integration tests for enhanced Web Dashboard — Phase 6.
+"""Integration tests for enhanced Web Dashboard -- Phase 6.
 
 Verifies all API endpoints (including new Phase 6 endpoints), the HTML
 dashboard page, and backward-compatibility with minimal context dicts.
@@ -11,11 +11,10 @@ import json
 import socket
 import sys
 import time
+import unittest
 import urllib.request
 from pathlib import Path
 from typing import Any, Dict
-
-import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
@@ -116,51 +115,42 @@ def _full_context() -> Dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
-# Fixtures
+# Base test class with server lifecycle
 # ---------------------------------------------------------------------------
 
-@pytest.fixture()
-def _dashboard_full():
-    """Start a dashboard server with full dummy context, yield base URL."""
-    port = _free_port()
-    server = DashboardServer(host="127.0.0.1", port=port, context=_full_context())
-    server.start()
-    base = f"http://127.0.0.1:{port}"
-    # Wait for the server to be ready.
-    deadline = time.monotonic() + 3.0
-    while time.monotonic() < deadline:
-        try:
-            urllib.request.urlopen(base, timeout=1)
-            break
-        except Exception:
-            time.sleep(0.05)
-    yield base
-    server.stop()
+
+class _DashboardTestBase(unittest.TestCase):
+    """Base class that starts/stops a DashboardServer per test."""
+
+    def _start_server(self, context: dict) -> str:
+        """Start a DashboardServer with the given context, return base URL."""
+        port = _free_port()
+        server = DashboardServer(host="127.0.0.1", port=port, context=context)
+        server.start()
+        base = f"http://127.0.0.1:{port}"
+        # Wait for the server to be ready.
+        deadline = time.monotonic() + 3.0
+        while time.monotonic() < deadline:
+            try:
+                urllib.request.urlopen(base, timeout=1)
+                break
+            except Exception:
+                time.sleep(0.05)
+        self._server = server
+        return base
+
+    def tearDown(self):
+        if hasattr(self, "_server"):
+            self._server.stop()
 
 
-@pytest.fixture()
-def _dashboard_minimal():
-    """Start a dashboard server with minimal (empty) context."""
-    port = _free_port()
-    server = DashboardServer(host="127.0.0.1", port=port, context={})
-    server.start()
-    base = f"http://127.0.0.1:{port}"
-    deadline = time.monotonic() + 3.0
-    while time.monotonic() < deadline:
-        try:
-            urllib.request.urlopen(base, timeout=1)
-            break
-        except Exception:
-            time.sleep(0.05)
-    yield base
-    server.stop()
+# ---------------------------------------------------------------------------
+# Tests
+# ---------------------------------------------------------------------------
 
 
-
-
-
-class TestAllApiEndpoints:
-    """test_all_api_endpoints — start DashboardServer with dummy context,
+class TestAllApiEndpoints(_DashboardTestBase):
+    """test_all_api_endpoints -- start DashboardServer with dummy context,
     verify all endpoints return valid JSON."""
 
     # Endpoints that are registered in the current codebase.
@@ -181,94 +171,102 @@ class TestAllApiEndpoints:
         "/api/history",
     ]
 
-    @pytest.mark.parametrize("endpoint", REGISTERED_ENDPOINTS + PENDING_ENDPOINTS)
-    def test_endpoint_returns_json_or_404(self, _dashboard_full, endpoint):
+    def setUp(self):
+        self._base = self._start_server(_full_context())
+
+    def test_endpoints_return_json_or_404(self):
         """Every registered endpoint must return parseable JSON.
         Pending endpoints may return 404 but must not crash the server."""
-        url = f"{_dashboard_full}{endpoint}"
-        try:
-            data = _get_json(url)
-            assert isinstance(data, dict), (
-                f"{endpoint} must return a JSON object, got {type(data)}"
-            )
-        except urllib.error.HTTPError as exc:
-            if exc.code == 404:
-                # Pending endpoint not yet registered -- acceptable.
-                if endpoint in self.PENDING_ENDPOINTS:
-                    pytest.skip(f"{endpoint} not yet registered (expected for Phase 6)")
-                else:
-                    pytest.fail(f"{endpoint} returned 404 — endpoint not registered")
-            body = exc.read()
-            try:
-                data = json.loads(body)
-            except json.JSONDecodeError:
-                pytest.fail(f"{endpoint} returned {exc.code} with non-JSON body")
-            assert isinstance(data, dict)
+        all_endpoints = self.REGISTERED_ENDPOINTS + self.PENDING_ENDPOINTS
+        for endpoint in all_endpoints:
+            with self.subTest(endpoint=endpoint):
+                url = f"{self._base}{endpoint}"
+                try:
+                    data = _get_json(url)
+                    self.assertIsInstance(data, dict, (
+                        f"{endpoint} must return a JSON object, got {type(data)}"
+                    ))
+                except urllib.error.HTTPError as exc:
+                    if exc.code == 404:
+                        # Pending endpoint not yet registered -- acceptable.
+                        if endpoint in self.PENDING_ENDPOINTS:
+                            continue  # skip -- expected
+                        else:
+                            self.fail(f"{endpoint} returned 404 -- endpoint not registered")
+                    body = exc.read()
+                    try:
+                        data = json.loads(body)
+                    except json.JSONDecodeError:
+                        self.fail(f"{endpoint} returned {exc.code} with non-JSON body")
+                    self.assertIsInstance(data, dict)
 
-    def test_summary_has_content(self, _dashboard_full):
+    def test_summary_has_content(self):
         """/api/summary must contain monitoring data from the provider."""
-        data = _get_json(f"{_dashboard_full}/api/summary")
-        assert "ts_ms" in data, "summary response must include ts_ms"
+        data = _get_json(f"{self._base}/api/summary")
+        self.assertIn("ts_ms", data, "summary response must include ts_ms")
         # With our dummy provider, cpu_avg should be present.
-        assert "cpu_avg" in data or "error" in data
+        self.assertTrue("cpu_avg" in data or "error" in data)
 
-    def test_alerts_structure(self, _dashboard_full):
+    def test_alerts_structure(self):
         """/api/alerts must include active_alerts and alert_history."""
-        data = _get_json(f"{_dashboard_full}/api/alerts")
-        assert "ts_ms" in data
-        assert "active_alerts" in data or "error" in data
+        data = _get_json(f"{self._base}/api/alerts")
+        self.assertIn("ts_ms", data)
+        self.assertTrue("active_alerts" in data or "error" in data)
 
-    def test_health_status(self, _dashboard_full):
+    def test_health_status(self):
         """/api/health must include a status field."""
-        data = _get_json(f"{_dashboard_full}/api/health")
-        assert "ts_ms" in data
-        assert "status" in data
+        data = _get_json(f"{self._base}/api/health")
+        self.assertIn("ts_ms", data)
+        self.assertIn("status", data)
 
-    def test_grafana_has_panels(self, _dashboard_full):
+    def test_grafana_has_panels(self):
         """/api/grafana-dashboard must return a Grafana-compatible dashboard."""
-        data = _get_json(f"{_dashboard_full}/api/grafana-dashboard")
-        assert "panels" in data, "grafana dashboard must have panels array"
-        assert isinstance(data["panels"], list)
-        assert len(data["panels"]) > 0
-        assert "title" in data
+        data = _get_json(f"{self._base}/api/grafana-dashboard")
+        self.assertIn("panels", data, "grafana dashboard must have panels array")
+        self.assertIsInstance(data["panels"], list)
+        self.assertGreater(len(data["panels"]), 0)
+        self.assertIn("title", data)
 
 
 # ---------------------------------------------------------------------------
 # HTML Dashboard
 # ---------------------------------------------------------------------------
 
-class TestDashboardHtmlServes:
-    """test_dashboard_html_serves — verify GET / returns HTML with
+class TestDashboardHtmlServes(_DashboardTestBase):
+    """test_dashboard_html_serves -- verify GET / returns HTML with
     'AI Edge Monitor'."""
 
-    def test_root_returns_html(self, _dashboard_full):
+    def setUp(self):
+        self._base = self._start_server(_full_context())
+
+    def test_root_returns_html(self):
         """GET / must return HTML content-type."""
-        url = _dashboard_full + "/"
+        url = self._base + "/"
         with urllib.request.urlopen(url, timeout=5) as resp:
             content_type = resp.headers.get("Content-Type", "")
-            assert "text/html" in content_type, f"Expected HTML, got {content_type}"
+            self.assertIn("text/html", content_type, f"Expected HTML, got {content_type}")
 
-    def test_html_contains_title(self, _dashboard_full):
+    def test_html_contains_title(self):
         """The HTML must contain the dashboard title 'AI Edge Monitor'."""
-        html = _get_raw(_dashboard_full + "/")
-        assert "AI Edge Monitor" in html, (
+        html = _get_raw(self._base + "/")
+        self.assertIn("AI Edge Monitor", html, (
             "HTML must contain 'AI Edge Monitor' in title or heading"
-        )
+        ))
 
-    def test_html_contains_chart_script(self, _dashboard_full):
+    def test_html_contains_chart_script(self):
         """The HTML should load Chart.js for dashboard charts."""
-        html = _get_raw(_dashboard_full + "/")
-        assert "chart.js" in html.lower() or "chartjs" in html.lower(), (
+        html = _get_raw(self._base + "/")
+        self.assertTrue("chart.js" in html.lower() or "chartjs" in html.lower(), (
             "HTML must reference Chart.js"
-        )
+        ))
 
 
 # ---------------------------------------------------------------------------
 # Backward Compatibility
 # ---------------------------------------------------------------------------
 
-class TestBackwardCompatibility:
-    """test_backward_compatibility — verify new endpoints return graceful
+class TestBackwardCompatibility(_DashboardTestBase):
+    """test_backward_compatibility -- verify new endpoints return graceful
     defaults when context is minimal (no providers wired)."""
 
     # All endpoints specified by the Phase 4-6 contract.
@@ -285,50 +283,56 @@ class TestBackwardCompatibility:
         "/api/history",
     ]
 
-    @pytest.mark.parametrize("endpoint", ALL_ENDPOINTS)
-    def test_minimal_context_no_crash(self, _dashboard_minimal, endpoint):
+    def setUp(self):
+        self._base = self._start_server({})
+
+    def test_minimal_context_no_crash(self):
         """Endpoints must not crash when called with empty context.
         Returns 2xx or 5xx/404 with JSON body (never a bare response with no body)."""
-        url = f"{_dashboard_minimal}{endpoint}"
-        try:
-            data = _get_json(url)
-        except urllib.error.HTTPError as exc:
-            if exc.code == 404:
-                # Endpoint not yet registered — server still alive, that is fine.
-                return
-            body = exc.read()
-            try:
-                data = json.loads(body)
-            except json.JSONDecodeError:
-                pytest.fail(
-                    f"{endpoint} returned {exc.code} with non-JSON body in minimal context"
-                )
-        assert isinstance(data, dict), (
-            f"{endpoint} must return a JSON object even with minimal context"
+        for endpoint in self.ALL_ENDPOINTS:
+            with self.subTest(endpoint=endpoint):
+                url = f"{self._base}{endpoint}"
+                try:
+                    data = _get_json(url)
+                except urllib.error.HTTPError as exc:
+                    if exc.code == 404:
+                        # Endpoint not yet registered -- server still alive, that is fine.
+                        continue
+                    body = exc.read()
+                    try:
+                        data = json.loads(body)
+                    except json.JSONDecodeError:
+                        self.fail(
+                            f"{endpoint} returned {exc.code} with non-JSON body in minimal context"
+                        )
+                self.assertIsInstance(data, dict, (
+                    f"{endpoint} must return a JSON object even with minimal context"
+                ))
+
+    def test_summary_graceful_default(self):
+        """/api/summary without provider must return a graceful error/default."""
+        data = _get_json(f"{self._base}/api/summary")
+        # Should contain an error indicator or ts_ms, not crash.
+        self.assertTrue("error" in data or "ts_ms" in data)
+
+    def test_health_graceful_default(self):
+        """/api/health without guardian must return not_configured."""
+        data = _get_json(f"{self._base}/api/health")
+        self.assertTrue(
+            data.get("status") in ("not_configured", "ok", "error") or "error" in data
         )
 
-    def test_summary_graceful_default(self, _dashboard_minimal):
-        """/api/summary without provider must return a graceful error/default."""
-        data = _get_json(f"{_dashboard_minimal}/api/summary")
-        # Should contain an error indicator or ts_ms, not crash.
-        assert "error" in data or "ts_ms" in data
-
-    def test_health_graceful_default(self, _dashboard_minimal):
-        """/api/health without guardian must return not_configured."""
-        data = _get_json(f"{_dashboard_minimal}/api/health")
-        assert data.get("status") in ("not_configured", "ok", "error") or "error" in data
-
-    def test_config_graceful_default(self, _dashboard_minimal):
+    def test_config_graceful_default(self):
         """/api/config without config must return not_configured."""
-        data = _get_json(f"{_dashboard_minimal}/api/config")
-        assert "ts_ms" in data
+        data = _get_json(f"{self._base}/api/config")
+        self.assertIn("ts_ms", data)
 
-    def test_grafana_still_works_without_context(self, _dashboard_minimal):
-        """/api/grafana-dashboard has no data dependency — must always work."""
-        data = _get_json(f"{_dashboard_minimal}/api/grafana-dashboard")
-        assert "panels" in data
-        assert len(data["panels"]) > 0
+    def test_grafana_still_works_without_context(self):
+        """/api/grafana-dashboard has no data dependency -- must always work."""
+        data = _get_json(f"{self._base}/api/grafana-dashboard")
+        self.assertIn("panels", data)
+        self.assertGreater(len(data["panels"]), 0)
 
 
 if __name__ == "__main__":
-    pytest.main([__file__, "-v"])
+    unittest.main()

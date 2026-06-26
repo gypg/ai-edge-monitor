@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 try:
-    import tensorrt as trt  # type: ignore
+    import tensorrt as trt
 
     HAS_TENSORRT = True
 except ImportError:

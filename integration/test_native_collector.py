@@ -1,4 +1,4 @@
-"""Integration tests for native collector — Phase 5.
+"""Integration tests for native collector -- Phase 5.
 
 Verifies that the Python fallback path works when the C++ native module is
 unavailable, and that the fallback returns the same structure as PlatformProbe.
@@ -8,10 +8,9 @@ from __future__ import annotations
 
 import sys
 import types
+import unittest
 from pathlib import Path
 from unittest import mock
-
-import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
@@ -22,7 +21,7 @@ from platform_adapter.probe import DummyProbe, PlatformCaps, PlatformProbe, RawM
 
 
 # ---------------------------------------------------------------------------
-# NativeProbe stub — mimics the expected pybind11 C++ bridge interface.
+# NativeProbe stub -- mimics the expected pybind11 C++ bridge interface.
 # ---------------------------------------------------------------------------
 # The actual native_collector C++ module is not built in CI (no C++ compiler
 # on the test host).  This stub represents the *interface contract* that the
@@ -72,30 +71,12 @@ class _NativeProbeStub:
 
 
 # ---------------------------------------------------------------------------
-# Force-dummy fallback: simulate native module unavailability.
+# Tests
 # ---------------------------------------------------------------------------
 
-@pytest.fixture()
-def _force_no_native():
-    """Ensure native_collector is not importable."""
-    saved = sys.modules.get("native_collector")
-    # Block import by making it raise ImportError.
-    blocker = types.ModuleType("native_collector")
-    blocker.__loader__ = None  # type: ignore[assignment]
-    # Patch builtins.__import__ to raise for native_collector.
-    original_import = __builtins__.__import__ if hasattr(__builtins__, "__import__") else __import__  # type: ignore[union-attr]
 
-    def _patched_import(name, *args, **kwargs):
-        if name == "native_collector":
-            raise ImportError("native_collector not available (force_dummy)")
-        return original_import(name, *args, **kwargs)
-
-    with mock.patch("builtins.__import__", side_effect=_patched_import):
-        yield
-
-
-class TestNativeFallback:
-    """test_native_fallback — verify Python fallback when native module unavailable."""
+class TestNativeFallback(unittest.TestCase):
+    """test_native_fallback -- verify Python fallback when native module unavailable."""
 
     def test_fallback_returns_dummy_probe(self):
         """When no C++ module is available, select_default_probe must return
@@ -103,92 +84,86 @@ class TestNativeFallback:
         from platform_adapter import select_default_probe
 
         probe = select_default_probe()
-        assert probe is not None
-        assert isinstance(probe, PlatformProbe)
+        self.assertIsNotNone(probe)
+        self.assertIsInstance(probe, PlatformProbe)
         # Must be able to read metrics without error.
         metrics = probe.read_metrics()
-        assert isinstance(metrics, RawMetrics)
-        assert metrics.status in ("ok", "partial", "not_supported")
+        self.assertIsInstance(metrics, RawMetrics)
+        self.assertIn(metrics.status, ("ok", "partial", "not_supported"))
 
     def test_dummy_probe_returns_raw_metrics(self):
         """DummyProbe (used in force_dummy mode) returns complete RawMetrics."""
         probe = DummyProbe()
         metrics = probe.read_metrics()
-        assert isinstance(metrics, RawMetrics)
-        assert metrics.probe_name == "dummy"
-        assert metrics.status == "ok"
-        assert isinstance(metrics.ts_ms, int)
-        assert isinstance(metrics.cpu_percent, float)
-        assert isinstance(metrics.mem_used_mb, float)
-        assert isinstance(metrics.mem_total_mb, float)
+        self.assertIsInstance(metrics, RawMetrics)
+        self.assertEqual(metrics.probe_name, "dummy")
+        self.assertEqual(metrics.status, "ok")
+        self.assertIsInstance(metrics.ts_ms, int)
+        self.assertIsInstance(metrics.cpu_percent, float)
+        self.assertIsInstance(metrics.mem_used_mb, float)
+        self.assertIsInstance(metrics.mem_total_mb, float)
 
     def test_native_probe_stub_implements_platform_probe_interface(self):
         """The NativeProbe stub must satisfy the PlatformProbe contract."""
         stub = _NativeProbeStub()
-        assert hasattr(stub, "is_available")
-        assert hasattr(stub, "detect_caps")
-        assert hasattr(stub, "read_metrics")
-        assert callable(stub.is_available)
-        assert callable(stub.detect_caps)
-        assert callable(stub.read_metrics)
-        assert stub.is_available() is True
+        self.assertTrue(hasattr(stub, "is_available"))
+        self.assertTrue(hasattr(stub, "detect_caps"))
+        self.assertTrue(hasattr(stub, "read_metrics"))
+        self.assertTrue(callable(stub.is_available))
+        self.assertTrue(callable(stub.detect_caps))
+        self.assertTrue(callable(stub.read_metrics))
+        self.assertTrue(stub.is_available())
         caps = stub.detect_caps()
-        assert isinstance(caps, PlatformCaps)
+        self.assertIsInstance(caps, PlatformCaps)
         metrics = stub.read_metrics()
-        assert isinstance(metrics, RawMetrics)
+        self.assertIsInstance(metrics, RawMetrics)
 
 
-class TestInterfaceCompatibility:
-    """test_interface_compatibility — verify NativeProbe (or fallback) returns
+class TestInterfaceCompatibility(unittest.TestCase):
+    """test_interface_compatibility -- verify NativeProbe (or fallback) returns
     same structure as PlatformProbe."""
 
-    @pytest.fixture()
-    def _probes(self):
-        """Return (native_stub, dummy_probe) pair for comparison."""
-        return _NativeProbeStub(), DummyProbe()
+    def setUp(self):
+        self._native = _NativeProbeStub()
+        self._dummy = DummyProbe()
 
-    def test_read_metrics_returns_same_type(self, _probes):
+    def test_read_metrics_returns_same_type(self):
         """Both probes must return RawMetrics."""
-        native, dummy = _probes
-        assert isinstance(native.read_metrics(), RawMetrics)
-        assert isinstance(dummy.read_metrics(), RawMetrics)
+        self.assertIsInstance(self._native.read_metrics(), RawMetrics)
+        self.assertIsInstance(self._dummy.read_metrics(), RawMetrics)
 
-    def test_raw_metrics_fields_match(self, _probes):
+    def test_raw_metrics_fields_match(self):
         """Both probes must return RawMetrics with identical field names."""
-        native, dummy = _probes
-        native_fields = set(vars(native.read_metrics()).keys())
-        dummy_fields = set(vars(dummy.read_metrics()).keys())
-        assert native_fields == dummy_fields, (
+        native_fields = set(vars(self._native.read_metrics()).keys())
+        dummy_fields = set(vars(self._dummy.read_metrics()).keys())
+        self.assertEqual(native_fields, dummy_fields, (
             f"Field mismatch: native-only={native_fields - dummy_fields}, "
             f"dummy-only={dummy_fields - native_fields}"
-        )
+        ))
 
-    def test_detect_caps_returns_platform_caps(self, _probes):
+    def test_detect_caps_returns_platform_caps(self):
         """Both probes must return PlatformCaps from detect_caps()."""
-        native, dummy = _probes
-        assert isinstance(native.detect_caps(), PlatformCaps)
-        assert isinstance(dummy.detect_caps(), PlatformCaps)
+        self.assertIsInstance(self._native.detect_caps(), PlatformCaps)
+        self.assertIsInstance(self._dummy.detect_caps(), PlatformCaps)
 
-    def test_is_available_returns_bool(self, _probes):
+    def test_is_available_returns_bool(self):
         """is_available() must return a bool for both probes."""
-        native, dummy = _probes
-        assert isinstance(native.is_available(), bool)
-        assert isinstance(dummy.is_available(), bool)
+        self.assertIsInstance(self._native.is_available(), bool)
+        self.assertIsInstance(self._dummy.is_available(), bool)
 
-    def test_required_raw_metrics_fields_present(self, _probes):
+    def test_required_raw_metrics_fields_present(self):
         """RawMetrics must contain all fields defined in the probe contract."""
         required_fields = {
             "ts_ms", "cpu_percent", "mem_used_mb", "mem_total_mb",
             "gpu_percent", "gpu_mem_used_mb", "temperature_c",
             "probe_name", "status", "latency_ms",
         }
-        native, dummy = _probes
-        for probe in (native, dummy):
+        for probe in (self._native, self._dummy):
             m = probe.read_metrics()
             actual = set(vars(m).keys())
             missing = required_fields - actual
-            assert not missing, f"{probe.name} missing fields: {missing}"
+            self.assertFalse(missing, f"{probe.name} missing fields: {missing}")
 
 
 if __name__ == "__main__":
-    pytest.main([__file__, "-v"])
+    unittest.main()

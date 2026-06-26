@@ -1,16 +1,15 @@
-"""Tests for GpuMemoryTracker — 4 correlation patterns + edge cases."""
+"""Tests for GpuMemoryTracker -- 4 correlation patterns + edge cases."""
 
 from __future__ import annotations
 
 import sys
+import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
-
-import pytest
 
 from memory_diagnostics.gpu_tracker import GpuLeakAlert, GpuMemoryTracker
 
@@ -19,26 +18,26 @@ from memory_diagnostics.gpu_tracker import GpuLeakAlert, GpuMemoryTracker
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _make_rising(start: float, step: float, count: int) -> list[float]:
+def _make_rising(start: float, step: float, count: int) -> list:
     """Return a list of linearly increasing values."""
     return [start + step * i for i in range(count)]
 
 
-def _make_constant(value: float, count: int) -> list[float]:
+def _make_constant(value: float, count: int) -> list:
     """Return a list of constant values."""
     return [value] * count
 
 
-def _timestamps(count: int, interval_ms: int = 1000) -> list[int]:
+def _timestamps(count: int, interval_ms: int = 1000) -> list:
     """Return evenly spaced timestamps starting at 0."""
     return [i * interval_ms for i in range(count)]
 
 
 def _feed(
     tracker: GpuMemoryTracker,
-    rss_values: list[float],
-    gpu_values: list[None | float],
-    timestamps: list[int],
+    rss_values: list,
+    gpu_values: list,
+    timestamps: list,
 ):
     """Feed a sequence of observations into *tracker*, returning the last result."""
     result = None
@@ -52,8 +51,8 @@ def _feed(
 # ---------------------------------------------------------------------------
 
 
-class TestDualLeak:
-    """Both RSS and GPU growing — expect CRITICAL alert."""
+class TestDualLeak(unittest.TestCase):
+    """Both RSS and GPU growing -- expect CRITICAL alert."""
 
     def test_dual_leak(self) -> None:
         tracker = GpuMemoryTracker(window_size=60, r_squared_threshold=0.8)
@@ -65,17 +64,17 @@ class TestDualLeak:
 
         alert = _feed(tracker, rss, gpu, ts)
 
-        assert alert is not None
-        assert alert.severity == "CRITICAL"
-        assert alert.pattern == "dual_leak"
-        assert alert.cpu_leak_detected is True
-        assert alert.gpu_leak_detected is True
-        assert alert.cpu_slope > 0
-        assert alert.gpu_slope > 0
+        self.assertIsNotNone(alert)
+        self.assertEqual(alert.severity, "CRITICAL")
+        self.assertEqual(alert.pattern, "dual_leak")
+        self.assertTrue(alert.cpu_leak_detected)
+        self.assertTrue(alert.gpu_leak_detected)
+        self.assertGreater(alert.cpu_slope, 0)
+        self.assertGreater(alert.gpu_slope, 0)
 
 
-class TestCpuOnlyLeak:
-    """RSS growing, GPU stable — expect WARNING with cpu_only_leak pattern."""
+class TestCpuOnlyLeak(unittest.TestCase):
+    """RSS growing, GPU stable -- expect WARNING with cpu_only_leak pattern."""
 
     def test_cpu_only_leak(self) -> None:
         tracker = GpuMemoryTracker(window_size=60, r_squared_threshold=0.8)
@@ -87,16 +86,16 @@ class TestCpuOnlyLeak:
 
         alert = _feed(tracker, rss, gpu, ts)
 
-        assert alert is not None
-        assert alert.severity == "WARNING"
-        assert alert.pattern == "cpu_only_leak"
-        assert alert.cpu_leak_detected is True
-        assert alert.gpu_leak_detected is False
-        assert alert.cpu_slope > 0
+        self.assertIsNotNone(alert)
+        self.assertEqual(alert.severity, "WARNING")
+        self.assertEqual(alert.pattern, "cpu_only_leak")
+        self.assertTrue(alert.cpu_leak_detected)
+        self.assertFalse(alert.gpu_leak_detected)
+        self.assertGreater(alert.cpu_slope, 0)
 
 
-class TestGpuOnlyLeak:
-    """RSS stable, GPU growing — expect WARNING with gpu_only_leak pattern."""
+class TestGpuOnlyLeak(unittest.TestCase):
+    """RSS stable, GPU growing -- expect WARNING with gpu_only_leak pattern."""
 
     def test_gpu_only_leak(self) -> None:
         tracker = GpuMemoryTracker(window_size=60, r_squared_threshold=0.8)
@@ -108,16 +107,16 @@ class TestGpuOnlyLeak:
 
         alert = _feed(tracker, rss, gpu, ts)
 
-        assert alert is not None
-        assert alert.severity == "WARNING"
-        assert alert.pattern == "gpu_only_leak"
-        assert alert.cpu_leak_detected is False
-        assert alert.gpu_leak_detected is True
-        assert alert.gpu_slope > 0
+        self.assertIsNotNone(alert)
+        self.assertEqual(alert.severity, "WARNING")
+        self.assertEqual(alert.pattern, "gpu_only_leak")
+        self.assertFalse(alert.cpu_leak_detected)
+        self.assertTrue(alert.gpu_leak_detected)
+        self.assertGreater(alert.gpu_slope, 0)
 
 
-class TestNoLeak:
-    """Both stable — expect None."""
+class TestNoLeak(unittest.TestCase):
+    """Both stable -- expect None."""
 
     def test_no_leak(self) -> None:
         tracker = GpuMemoryTracker(window_size=60, r_squared_threshold=0.8)
@@ -129,11 +128,11 @@ class TestNoLeak:
 
         alert = _feed(tracker, rss, gpu, ts)
 
-        assert alert is None
+        self.assertIsNone(alert)
 
 
-class TestNoneGpuData:
-    """gpu_mem_mb=None — falls back to CPU-only analysis."""
+class TestNoneGpuData(unittest.TestCase):
+    """gpu_mem_mb=None -- falls back to CPU-only analysis."""
 
     def test_none_gpu_data_cpu_leak(self) -> None:
         tracker = GpuMemoryTracker(window_size=60, r_squared_threshold=0.8)
@@ -145,11 +144,11 @@ class TestNoneGpuData:
 
         alert = _feed(tracker, rss, gpu, ts)
 
-        assert alert is not None
-        assert alert.severity == "WARNING"
-        assert alert.pattern == "cpu_only_leak"
-        assert alert.cpu_leak_detected is True
-        assert alert.gpu_leak_detected is False
+        self.assertIsNotNone(alert)
+        self.assertEqual(alert.severity, "WARNING")
+        self.assertEqual(alert.pattern, "cpu_only_leak")
+        self.assertTrue(alert.cpu_leak_detected)
+        self.assertFalse(alert.gpu_leak_detected)
 
     def test_none_gpu_data_no_leak(self) -> None:
         """Stable RSS with no GPU data should produce no alert."""
@@ -162,11 +161,11 @@ class TestNoneGpuData:
 
         alert = _feed(tracker, rss, gpu, ts)
 
-        assert alert is None
+        self.assertIsNone(alert)
 
 
-class TestInsufficientData:
-    """Fewer than 5 observations — expect None."""
+class TestInsufficientData(unittest.TestCase):
+    """Fewer than 5 observations -- expect None."""
 
     def test_insufficient_data_returns_none(self) -> None:
         tracker = GpuMemoryTracker(window_size=60, r_squared_threshold=0.8)
@@ -178,7 +177,7 @@ class TestInsufficientData:
             ts = _timestamps(count)
 
             result = _feed(sub, rss, gpu, ts)
-            assert result is None, f"Expected None for {count} samples, got {result}"
+            self.assertIsNone(result, f"Expected None for {count} samples, got {result}")
 
     def test_exactly_five_can_alert(self) -> None:
         """With exactly 5 samples showing a strong trend, an alert may fire."""
@@ -191,5 +190,9 @@ class TestInsufficientData:
 
         alert = _feed(tracker, rss, gpu, ts)
         # With 5 perfect linear points and a low threshold, should detect.
-        assert alert is not None
-        assert alert.severity == "CRITICAL"
+        self.assertIsNotNone(alert)
+        self.assertEqual(alert.severity, "CRITICAL")
+
+
+if __name__ == "__main__":
+    unittest.main()

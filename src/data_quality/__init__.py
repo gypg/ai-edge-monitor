@@ -142,8 +142,8 @@ class DataQualityProcessor:
                     # 线性插值
                     history_key = self._get_history_key(field)
                     if history_key and len(self._history[history_key]) >= 2:
-                        last_two = self._history[history_key][-2:]
-                        processed[field] = (last_two[0] + last_two[1]) / 2
+                        h = list(self._history[history_key])
+                        processed[field] = (h[-2] + h[-1]) / 2
                     else:
                         processed[field] = 0.0
                 
@@ -180,7 +180,7 @@ class DataQualityProcessor:
         
         return processed
     
-    def _detect_outlier(self, value: float, history: List[float]) -> bool:
+    def _detect_outlier(self, value: float, history: Any) -> bool:
         """检测异常值"""
         if len(history) < 10:
             return False

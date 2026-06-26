@@ -9,9 +9,14 @@ from __future__ import annotations
 import importlib
 import sys
 import types
+import unittest
+from pathlib import Path
 from unittest import mock
 
-import pytest
+ROOT = Path(__file__).resolve().parents[2]
+SRC = ROOT / "src"
+if str(SRC) not in sys.path:
+    sys.path.insert(0, str(SRC))
 
 
 # ---------------------------------------------------------------------------
@@ -64,9 +69,9 @@ def _load_node_with_ros2():
         "std_msgs.msg": fake_std_msgs.msg,
     }
     with mock.patch.dict(sys.modules, patched):
-        sys.modules.pop("src.ros2_bridge.node", None)
-        sys.modules.pop("src.ros2_bridge", None)
-        import src.ros2_bridge.node as mod
+        sys.modules.pop("ros2_bridge.node", None)
+        sys.modules.pop("ros2_bridge", None)
+        import ros2_bridge.node as mod
         importlib.reload(mod)
         return mod
 
@@ -84,9 +89,9 @@ def _load_node_without_ros2():
         for key in list(sys.modules):
             if key.startswith("rclpy") or key.startswith("std_msgs"):
                 sys.modules.pop(key)
-        sys.modules.pop("src.ros2_bridge.node", None)
-        sys.modules.pop("src.ros2_bridge", None)
-        import src.ros2_bridge.node as mod
+        sys.modules.pop("ros2_bridge.node", None)
+        sys.modules.pop("ros2_bridge", None)
+        import ros2_bridge.node as mod
         importlib.reload(mod)
         return mod
 
@@ -95,12 +100,12 @@ def _load_node_without_ros2():
 # Tests
 # ---------------------------------------------------------------------------
 
-class TestNodeStubNoRos2:
+class TestNodeStubNoRos2(unittest.TestCase):
     """Verify no-op behaviour when ROS2 is not installed."""
 
     def test_has_ros2_false(self):
         mod = _load_node_without_ros2()
-        assert mod.HAS_ROS2 is False
+        self.assertFalse(mod.HAS_ROS2)
 
     def test_monitor_node_is_plain_object(self):
         mod = _load_node_without_ros2()
@@ -112,18 +117,18 @@ class TestNodeStubNoRos2:
 
     def test_create_monitor_node_returns_none(self):
         mod = _load_node_without_ros2()
-        assert mod.create_monitor_node() is None
+        self.assertIsNone(mod.create_monitor_node())
 
 
-class TestNodeWithMockRos2:
+class TestNodeWithMockRos2(unittest.TestCase):
     """Verify node behaviour with a mocked ROS2 stack."""
 
     def test_publishers_created(self):
         mod = _load_node_with_ros2()
         node = mod.MonitorNode("test_node")
         # 5 system + 3 inference + 1 status = 9 publishers
-        assert len(node._pubs) == 8
-        assert hasattr(node, "_status_pub")
+        self.assertEqual(len(node._pubs), 8)
+        self.assertTrue(hasattr(node, "_status_pub"))
 
     def test_publish_metrics_forwards_values(self):
         mod = _load_node_with_ros2()
@@ -158,5 +163,9 @@ class TestNodeWithMockRos2:
     def test_create_monitor_node_returns_instance(self):
         mod = _load_node_with_ros2()
         node = mod.create_monitor_node("custom_name")
-        assert node is not None
-        assert isinstance(node, mod.MonitorNode)
+        self.assertIsNotNone(node)
+        self.assertIsInstance(node, mod.MonitorNode)
+
+
+if __name__ == "__main__":
+    unittest.main()

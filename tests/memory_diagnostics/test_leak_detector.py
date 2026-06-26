@@ -1,13 +1,20 @@
+"""Tests for LeakDetector."""
+
 from __future__ import annotations
 
 import random
 import sys
+import unittest
+from pathlib import Path
 from typing import List, Tuple
 
-import pytest
+ROOT = Path(__file__).resolve().parents[2]
+SRC = ROOT / "src"
+if str(SRC) not in sys.path:
+    sys.path.insert(0, str(SRC))
 
-from src.memory_diagnostics.leak_detector import LeakDetector, _linear_regression
-from src.memory_diagnostics.models import LeakAlert
+from memory_diagnostics.leak_detector import LeakDetector, _linear_regression
+from memory_diagnostics.models import LeakAlert
 
 
 # ---------------------------------------------------------------------------
@@ -64,34 +71,34 @@ def _generate_noisy(
 # ---------------------------------------------------------------------------
 
 
-class TestLinearRegression:
+class TestLinearRegression(unittest.TestCase):
     """Unit tests for the pure-Python linear regression helper."""
 
     def test_perfect_line(self) -> None:
         xs = [float(i) for i in range(10)]
         ys = [2.0 * x + 3.0 for x in xs]
         slope, intercept, r_sq = _linear_regression(xs, ys)
-        assert abs(slope - 2.0) < 1e-9
-        assert abs(intercept - 3.0) < 1e-9
-        assert abs(r_sq - 1.0) < 1e-9
+        self.assertAlmostEqual(slope, 2.0, places=9)
+        self.assertAlmostEqual(intercept, 3.0, places=9)
+        self.assertAlmostEqual(r_sq, 1.0, places=9)
 
     def test_two_points(self) -> None:
         slope, intercept, r_sq = _linear_regression([0.0, 1.0], [0.0, 1.0])
-        assert abs(slope - 1.0) < 1e-9
-        assert abs(r_sq - 1.0) < 1e-9
+        self.assertAlmostEqual(slope, 1.0, places=9)
+        self.assertAlmostEqual(r_sq, 1.0, places=9)
 
     def test_single_point_returns_zeros(self) -> None:
         slope, intercept, r_sq = _linear_regression([1.0], [1.0])
-        assert slope == 0.0
-        assert r_sq == 0.0
+        self.assertEqual(slope, 0.0)
+        self.assertEqual(r_sq, 0.0)
 
     def test_empty_returns_zeros(self) -> None:
         slope, intercept, r_sq = _linear_regression([], [])
-        assert slope == 0.0
-        assert r_sq == 0.0
+        self.assertEqual(slope, 0.0)
+        self.assertEqual(r_sq, 0.0)
 
 
-class TestLeakDetector:
+class TestLeakDetector(unittest.TestCase):
     """Tests for the LeakDetector class."""
 
     def test_linear_growth_detected(self) -> None:
@@ -103,11 +110,11 @@ class TestLeakDetector:
         for rss, ts in samples:
             alert = detector.observe(rss, ts)
 
-        assert alert is not None
-        assert isinstance(alert, LeakAlert)
-        assert alert.r_squared > 0.99
-        assert alert.slope_mb_per_sec > 0.1
-        assert alert.sample_count == 30
+        self.assertIsNotNone(alert)
+        self.assertIsInstance(alert, LeakAlert)
+        self.assertGreater(alert.r_squared, 0.99)
+        self.assertGreater(alert.slope_mb_per_sec, 0.1)
+        self.assertEqual(alert.sample_count, 30)
 
     def test_steady_state_no_alert(self) -> None:
         """Constant RSS must never produce an alert."""
@@ -116,7 +123,7 @@ class TestLeakDetector:
 
         for rss, ts in samples:
             alert = detector.observe(rss, ts)
-            assert alert is None
+            self.assertIsNone(alert)
 
     def test_random_noise_no_alert(self) -> None:
         """Random fluctuations without a trend must not trigger an alert."""
@@ -125,22 +132,21 @@ class TestLeakDetector:
 
         for rss, ts in samples:
             alert = detector.observe(rss, ts)
-            assert alert is None
+            self.assertIsNone(alert)
 
     def test_r_squared_threshold(self) -> None:
         """Alert must not fire when R-squared is below the threshold."""
-        # Use a very high R-squared threshold that linear data cannot reach
-        # with slight noise
         detector = LeakDetector(window_size=30, r_squared_threshold=0.999, slope_threshold_mb_per_sec=0.001)
 
         rng = random.Random(123)
+        alert = None
         for i in range(40):
             ts = 1_000_000 + i * 1000
             rss = 100.0 + 1.0 * i + rng.uniform(-2.0, 2.0)
             alert = detector.observe(rss, ts)
 
         # Noisy data should not achieve R-squared > 0.999
-        assert alert is None
+        self.assertIsNone(alert)
 
     def test_slope_threshold(self) -> None:
         """Alert must not fire when slope is below the threshold."""
@@ -152,7 +158,7 @@ class TestLeakDetector:
         for rss, ts in samples:
             alert = detector.observe(rss, ts)
 
-        assert alert is None
+        self.assertIsNone(alert)
 
     def test_window_size(self) -> None:
         """Internal deque must respect maxlen = window_size."""
@@ -163,7 +169,7 @@ class TestLeakDetector:
         for i in range(30):
             detector.observe(100.0 + i, 1_000_000 + i * 1000)
 
-        assert len(detector._observations) == window
+        self.assertEqual(len(detector._observations), window)
 
     def test_memory_efficiency(self) -> None:
         """Detector RSS must stay under 1 MB after 10 000 observations."""
@@ -172,11 +178,11 @@ class TestLeakDetector:
             detector.observe(float(i % 100), 1_000_000 + i * 1000)
 
         # The deque holds at most 60 tuples; check its size directly
-        assert len(detector._observations) == 60
+        self.assertEqual(len(detector._observations), 60)
         # Approximate memory: 60 tuples * ~120 bytes each < 10 KB
         # This is well under 1 MB.  We can also check via sys.getsizeof.
         size = sys.getsizeof(detector._observations)
-        assert size < 1_048_576  # 1 MB
+        self.assertLess(size, 1_048_576)  # 1 MB
 
     def test_alert_fields(self) -> None:
         """LeakAlert fields must be correctly populated."""
@@ -187,12 +193,12 @@ class TestLeakDetector:
         for rss, ts in samples:
             alert = detector.observe(rss, ts)
 
-        assert alert is not None
-        assert alert.window_start_ms == 500_000 + 5 * 1000  # 6th observation (index 5) after window fills
-        assert alert.window_end_ms == 500_000 + 24 * 1000
-        assert alert.sample_count == 20
-        assert alert.estimated_time_to_oom is not None
-        assert alert.estimated_time_to_oom > 0
+        self.assertIsNotNone(alert)
+        self.assertEqual(alert.window_start_ms, 500_000 + 5 * 1000)  # 6th observation (index 5) after window fills
+        self.assertEqual(alert.window_end_ms, 500_000 + 24 * 1000)
+        self.assertEqual(alert.sample_count, 20)
+        self.assertIsNotNone(alert.estimated_time_to_oom)
+        self.assertGreater(alert.estimated_time_to_oom, 0)
 
     def test_alert_frozen(self) -> None:
         """LeakAlert must be immutable."""
@@ -203,6 +209,10 @@ class TestLeakDetector:
         for rss, ts in samples:
             alert = detector.observe(rss, ts)
 
-        assert alert is not None
-        with pytest.raises(AttributeError):
+        self.assertIsNotNone(alert)
+        with self.assertRaises(AttributeError):
             alert.r_squared = 0.0  # type: ignore[misc]
+
+
+if __name__ == "__main__":
+    unittest.main()

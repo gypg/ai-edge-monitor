@@ -3,93 +3,105 @@
 from __future__ import annotations
 
 import json
+import sys
+import unittest
+from pathlib import Path
 
-import pytest
+ROOT = Path(__file__).resolve().parents[2]
+SRC = ROOT / "src"
+if str(SRC) not in sys.path:
+    sys.path.insert(0, str(SRC))
 
-from src.web_dashboard.grafana import GrafanaDashboardGenerator
-
-
-@pytest.fixture()
-def dashboard() -> dict:
-    """Return a freshly generated dashboard dict."""
-    return GrafanaDashboardGenerator().generate()
+from web_dashboard.grafana import GrafanaDashboardGenerator
 
 
-class TestDashboardHasPanels:
+class TestDashboardHasPanels(unittest.TestCase):
     """Verify the dashboard contains at least 7 panels."""
 
-    def test_panel_count(self, dashboard: dict) -> None:
-        panels = dashboard.get("panels", [])
-        assert len(panels) >= 7, f"Expected >=7 panels, got {len(panels)}"
+    def setUp(self) -> None:
+        self.dashboard = GrafanaDashboardGenerator().generate()
 
-    def test_each_panel_has_title(self, dashboard: dict) -> None:
-        for panel in dashboard["panels"]:
-            assert "title" in panel
-            assert panel["title"], "Panel title must not be empty"
+    def test_panel_count(self) -> None:
+        panels = self.dashboard.get("panels", [])
+        self.assertGreaterEqual(len(panels), 7, f"Expected >=7 panels, got {len(panels)}")
+
+    def test_each_panel_has_title(self) -> None:
+        for panel in self.dashboard["panels"]:
+            self.assertIn("title", panel)
+            self.assertTrue(panel["title"], "Panel title must not be empty")
 
 
-class TestDashboardSchema:
+class TestDashboardSchema(unittest.TestCase):
     """Verify required Grafana dashboard fields are present."""
 
-    def test_required_top_level_keys(self, dashboard: dict) -> None:
+    def setUp(self) -> None:
+        self.dashboard = GrafanaDashboardGenerator().generate()
+
+    def test_required_top_level_keys(self) -> None:
         required_keys = {"panels", "title", "templating", "schemaVersion"}
-        missing = required_keys - dashboard.keys()
-        assert not missing, f"Missing keys: {missing}"
+        missing = required_keys - self.dashboard.keys()
+        self.assertFalse(missing, f"Missing keys: {missing}")
 
-    def test_title_value(self, dashboard: dict) -> None:
-        assert dashboard["title"] == "AI Edge Monitor"
+    def test_title_value(self) -> None:
+        self.assertEqual(self.dashboard["title"], "AI Edge Monitor")
 
-    def test_templating_list_exists(self, dashboard: dict) -> None:
-        templating = dashboard["templating"]
-        assert isinstance(templating, dict)
-        assert "list" in templating
-        assert isinstance(templating["list"], list)
+    def test_templating_list_exists(self) -> None:
+        templating = self.dashboard["templating"]
+        self.assertIsInstance(templating, dict)
+        self.assertIn("list", templating)
+        self.assertIsInstance(templating["list"], list)
 
-    def test_schema_version_is_int(self, dashboard: dict) -> None:
-        assert isinstance(dashboard["schemaVersion"], int)
+    def test_schema_version_is_int(self) -> None:
+        self.assertIsInstance(self.dashboard["schemaVersion"], int)
 
 
-class TestDashboardDatasource:
+class TestDashboardDatasource(unittest.TestCase):
     """Verify Prometheus datasource is configured."""
 
-    def test_datasource_type(self, dashboard: dict) -> None:
-        for panel in dashboard["panels"]:
-            ds = panel.get("datasource", {})
-            assert ds.get("type") == "prometheus", (
-                f"Panel '{panel['title']}' datasource type is not prometheus"
-            )
+    def setUp(self) -> None:
+        self.dashboard = GrafanaDashboardGenerator().generate()
 
-    def test_templating_datasource(self, dashboard: dict) -> None:
-        tvars = dashboard["templating"]["list"]
+    def test_datasource_type(self) -> None:
+        for panel in self.dashboard["panels"]:
+            ds = panel.get("datasource", {})
+            self.assertEqual(ds.get("type"), "prometheus",
+                             f"Panel '{panel['title']}' datasource type is not prometheus")
+
+    def test_templating_datasource(self) -> None:
+        tvars = self.dashboard["templating"]["list"]
         ds_vars = [v for v in tvars if v.get("type") == "datasource"]
-        assert len(ds_vars) >= 1, "Expected at least one datasource variable"
-        assert ds_vars[0]["query"] == "prometheus"
+        self.assertGreaterEqual(len(ds_vars), 1, "Expected at least one datasource variable")
+        self.assertEqual(ds_vars[0]["query"], "prometheus")
 
     def test_custom_datasource_uid(self) -> None:
         gen = GrafanaDashboardGenerator()
         dash = gen.generate(datasource="MyProm")
         for panel in dash["panels"]:
-            assert panel["datasource"]["uid"] == "MyProm"
+            self.assertEqual(panel["datasource"]["uid"], "MyProm")
 
 
-class TestApiEndpoint:
+class TestApiEndpoint(unittest.TestCase):
     """Verify the /api/grafana-dashboard handler returns valid JSON."""
 
     def test_handler_returns_dict(self) -> None:
-        from src.web_dashboard.api import handle_grafana
+        from web_dashboard.api import handle_grafana
 
         result = handle_grafana("/api/grafana-dashboard", {}, {})
-        assert isinstance(result, dict)
+        self.assertIsInstance(result, dict)
 
     def test_handler_returns_serializable_json(self) -> None:
-        from src.web_dashboard.api import handle_grafana
+        from web_dashboard.api import handle_grafana
 
         result = handle_grafana("/api/grafana-dashboard", {}, {})
         text = json.dumps(result)
         parsed = json.loads(text)
-        assert parsed["title"] == "AI Edge Monitor"
+        self.assertEqual(parsed["title"], "AI Edge Monitor")
 
     def test_handler_registered_in_routes(self) -> None:
-        from src.web_dashboard.api import API_ROUTES
+        from web_dashboard.api import API_ROUTES
 
-        assert "/api/grafana-dashboard" in API_ROUTES
+        self.assertIn("/api/grafana-dashboard", API_ROUTES)
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -1,12 +1,23 @@
-"""Tests for SysfsPowerSource device name selection."""
+"""Tests for SysfsPowerSource device name selection.
+
+This module uses only stdlib assertions so it can be run directly with
+``python tests/power_monitor/test_sysfs_source.py`` in CI environments that
+do not have pytest installed.
+"""
 
 from __future__ import annotations
 
 import os
+import sys
 import tempfile
 from pathlib import Path
 
-from src.power_monitor.source import SysfsPowerSource
+ROOT = Path(__file__).resolve().parents[2]
+SRC = ROOT / "src"
+if str(SRC) not in sys.path:
+    sys.path.insert(0, str(SRC))
+
+from power_monitor.source import SysfsPowerSource  # noqa: E402
 
 
 def test_sysfs_power_source_prefers_named_device() -> None:
@@ -34,3 +45,9 @@ def test_sysfs_power_source_falls_back_when_device_name_missing() -> None:
         source = SysfsPowerSource(base_dir=tmp, device_name="UNKNOWN")
         assert source.is_available()
         assert source._chosen_path == str(ac_dir)
+
+
+if __name__ == "__main__":
+    test_sysfs_power_source_prefers_named_device()
+    test_sysfs_power_source_falls_back_when_device_name_missing()
+    print("OK")

@@ -4,9 +4,7 @@ This module defines the source contract, a DummySource for tests, and a
 SysfsPowerSource that reads from /sys/class/power_supply on Linux edge
 devices (the PRD's first-priority backend).
 
-Notes:
-- TODO: add JetsonStatsPowerSource (jtop) and TegrastatsPowerSource for
-  Jetson-specific power rails behind this abstraction.
+Jetson-specific power rails are provided by `power_monitor.jetson_source`.
 """
 
 from __future__ import annotations
@@ -16,7 +14,10 @@ import random
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import List, Literal, Optional, Protocol, Tuple
+from typing import TYPE_CHECKING, List, Literal, Optional, Protocol, Tuple
+
+if TYPE_CHECKING:
+    from .jetson_source import JetsonPowerSource
 
 Quality = Literal["raw", "derived", "estimated", "unavailable"]
 ReadStatus = Literal["ok", "timeout", "io_error", "parse_error", "not_supported"]
@@ -266,17 +267,20 @@ class SysfsPowerSource(PowerSource):
         )
 
 
-def select_default_source(prefer: Tuple[str, ...] = ("sysfs",)) -> PowerSource:
+def select_default_source(prefer: Tuple[str, ...] = ("sysfs", "jetson")) -> PowerSource:
     """Return the first available source from `prefer`, falling back to DummySource.
 
     Used by the integration demo to wire a "real if possible, mock otherwise"
     pipeline without the caller hand-rolling probe logic.
     """
+    from .jetson_source import JetsonPowerSource
+
     candidates: List[PowerSource] = []
     for name in prefer:
         if name == "sysfs":
             candidates.append(SysfsPowerSource())
-        # TODO: add jtop, tegrastats handlers here.
+        elif name == "jetson":
+            candidates.append(JetsonPowerSource())
     for src in candidates:
         if src.is_available():
             return src

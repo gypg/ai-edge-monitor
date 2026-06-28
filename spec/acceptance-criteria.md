@@ -266,3 +266,18 @@
 - **CLI 增强**：dashboard 子命令新增 --inference-model/--target-fps/--target-latency
 - **README 更新**：新增推理监控/AI Advisor/内存诊断/ROS2 章节
 - **pyproject.toml**：新增 ros2/tensorrt/onnxruntime 可选依赖
+
+### Jetson GPU / Power 平台支持补充
+
+- **JetsonProbe**：新增 `src/platform_adapter/jetson_probe.py`，通过 jtop / tegrastats 提供 GPU 与功耗指标
+- **JetsonPowerSource**：新增 `src/power_monitor/jetson_source.py`，在 sysfs 不可用时读取 Jetson 板级功耗
+- **测试证据**：5 tests PASSED (`test_jetson_probe` + `test_jetson_source`)
+
+### 最新全量测试证据
+
+- **日期**：2026-06-28
+- **测试命令**：`python -m pytest tests/ integration/ -q --tb=short`
+- **测试输出**：
+  ```
+  607 passed, 3 skipped, 21 subtests passed in 131.51s (0:02:11)
+  ```

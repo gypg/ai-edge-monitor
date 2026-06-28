@@ -58,7 +58,8 @@
 ## GPU 监控能力
 
 ### Jetson 设备
-- **nvidia-smi**: 支持 GPU 利用率、显存使用、温度
+- **jtop / tegrastats**: 首选 GPU 利用率、显存使用、功耗读取方式（`JetsonProbe` / `JetsonPowerSource`）
+- **nvidia-smi**: 备用 GPU 利用率和显存读取方式
 - **CUDA**: 自动检测 CUDA 能力
 - **TensorRT**: 自动检测 TensorRT 支持
 
@@ -84,6 +85,7 @@
 ## 功耗监控
 
 ### Jetson 设备
+- **jtop / tegrastats**: 首选功耗读取方式（`JetsonPowerSource`），通过 jtop 的 `power` 或 tegrastats 的 `VDD_IN` 获取
 - **sysfs**: `/sys/class/power_supply/*`
 - **INA3221**: 三通道电流/电压监测
 - **功耗范围**: 5W - 30W（取决于型号）
@@ -186,17 +188,21 @@ thresholds:
 **问题**: GPU 监控不可用
 ```
 解决方案:
-1. 检查 nvidia-smi 是否安装: nvidia-smi --version
-2. 检查 CUDA 是否安装: nvcc --version
-3. 检查权限: sudo usermod -aG video $USER
+1. 安装 jetson-stats: sudo pip install jetson-stats
+2. 检查 jtop 是否可用: jtop --version
+3. 检查 tegrastats 是否可用: tegrastats --stop
+4. 检查 nvidia-smi 是否安装: nvidia-smi --version
+5. 检查 CUDA 是否安装: nvcc --version
+6. 检查权限: sudo usermod -aG video $USER
 ```
 
 **问题**: 温度监控失败
 ```
 解决方案:
-1. 检查温度传感器: ls /sys/class/thermal/
-2. 检查权限: sudo chmod 644 /sys/class/thermal/thermal_zone*/temp
-3. 使用 jtop 工具: sudo pip install jetson-stats
+1. 检查 jtop 温度页签是否显示: jtop
+2. 检查温度传感器: ls /sys/class/thermal/
+3. 检查权限: sudo chmod 644 /sys/class/thermal/thermal_zone*/temp
+4. 使用 jtop 工具: sudo pip install jetson-stats
 ```
 
 ### Raspberry Pi 设备

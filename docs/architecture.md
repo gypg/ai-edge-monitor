@@ -83,15 +83,17 @@ The collection layer is responsible for acquiring raw hardware metrics from the 
 **platform_adapter** probes (priority order):
 
 ```
-nvidia-smi (GPU)  -->  procfs (/proc/stat, /proc/meminfo)  -->  psutil  -->  dummy
+embedded (Jetson/Raspberry Pi)  -->  procfs (/proc/stat, /proc/meminfo)  -->  psutil  -->  dummy
 ```
 
-When an NVIDIA GPU is detected, `CompositeProbe` combines `PsutilProbe` (CPU/memory) with `NvidiaSmiProbe` (GPU utilization, VRAM, temperature) into a single `RawMetrics` object.
+Optional GPU / accelerator probes are automatically composed when available:
+- `NvidiaSmiProbe` reads discrete NVIDIA GPUs via `nvidia-smi`
+- `JetsonProbe` reads Jetson integrated GPU and power via `jtop` / `tegrastats`
 
 **power_monitor** sources (priority order):
 
 ```
-sysfs (/sys/class/power_supply)  -->  dummy
+sysfs (/sys/class/power_supply)  -->  jetson (jtop/tegrastats)  -->  dummy
 ```
 
 Each sampler runs on a `time.monotonic()` + sleep drift-compensated timer, avoiding busy-wait loops.

@@ -4,13 +4,9 @@ Used as a fallback when /proc isn't available (Windows dev hosts, macOS).
 On Linux this overlaps with ProcfsProbe; ProcfsProbe is preferred there
 because it avoids the psutil dependency and is faster on cold caches.
 
-Notes:
-- psutil.cpu_percent(interval=None) is non-blocking but the first call
-  returns 0.0 because it has no previous baseline. We prime it once in
-  __init__ to avoid surprising consumers on the first reading.
-- psutil does NOT expose board-level power; per the module split, power
-  is collected by power_monitor and stays out of this probe.
-- TODO: real GPU support belongs in a dedicated probe (NVML / jetson-stats).
+GPU metrics on NVIDIA/Jetson platforms are provided by NvidiaSmiProbe
+and JetsonProbe; this probe intentionally leaves GPU fields as None so
+that a CompositeProbe can fill them in.
 """
 
 from __future__ import annotations
@@ -54,7 +50,7 @@ class PsutilProbe(PlatformProbe):
         return PlatformCaps(
             has_cpu=True,
             has_mem=True,
-            has_gpu=False,  # TODO: NVML/jetson-stats integration.
+            has_gpu=False,
             has_temp_sensor=has_temp,
             has_power_sensor=False,
             platform_name="psutil",

@@ -153,7 +153,7 @@ def generate_debug_bundle(
     if not isinstance(pid, int) or pid <= 0:
         raise ValueError(f"pid must be a positive integer, got {pid!r}")
 
-    start = time.monotonic()
+    start = time.perf_counter()
 
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     bundle_name = f"debug_bundle_{pid}_{timestamp}"
@@ -161,14 +161,10 @@ def generate_debug_bundle(
     bundle_dir.mkdir(parents=True, exist_ok=True)
 
     # -- 1. /proc status --------------------------------------------------
-    (bundle_dir / "proc_status.txt").write_text(
-        _read_proc_file(pid, "status"), encoding="utf-8"
-    )
+    (bundle_dir / "proc_status.txt").write_text(_read_proc_file(pid, "status"), encoding="utf-8")
 
     # -- 2. /proc maps -----------------------------------------------------
-    (bundle_dir / "proc_maps.txt").write_text(
-        _read_proc_file(pid, "maps"), encoding="utf-8"
-    )
+    (bundle_dir / "proc_maps.txt").write_text(_read_proc_file(pid, "maps"), encoding="utf-8")
 
     # -- 3. smaps rollup ---------------------------------------------------
     (bundle_dir / "smaps_rollup.txt").write_text(
@@ -176,9 +172,7 @@ def generate_debug_bundle(
     )
 
     # -- 4. dmesg tail -----------------------------------------------------
-    (bundle_dir / "dmesg_tail.txt").write_text(
-        _read_dmesg_tail(), encoding="utf-8"
-    )
+    (bundle_dir / "dmesg_tail.txt").write_text(_read_dmesg_tail(), encoding="utf-8")
 
     # -- 5. RSS timeline CSV -----------------------------------------------
     if rss_timeline:
@@ -189,7 +183,7 @@ def generate_debug_bundle(
         _write_csv(bundle_dir / "gpu_mem_timeline.csv", gpu_timeline)
 
     # -- 7. Diagnosis summary JSON -----------------------------------------
-    elapsed_ms = (time.monotonic() - start) * 1000
+    elapsed_ms = (time.perf_counter() - start) * 1000
     diagnosis: Dict[str, Any] = {
         "pid": pid,
         "platform": _PLATFORM,
@@ -204,9 +198,7 @@ def generate_debug_bundle(
     # Size constraint check
     size_bytes = _dir_size_bytes(bundle_dir)
     if size_bytes > _MAX_BUNDLE_SIZE_BYTES:
-        warning = (
-            f"Bundle size ({size_bytes} bytes) exceeds {_MAX_BUNDLE_SIZE_BYTES} bytes"
-        )
+        warning = f"Bundle size ({size_bytes} bytes) exceeds {_MAX_BUNDLE_SIZE_BYTES} bytes"
         LOG.warning(warning)
         diagnosis["warnings"].append(warning)
 

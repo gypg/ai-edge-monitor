@@ -5,8 +5,8 @@ memory from /proc/meminfo, and temperature from
 /sys/class/thermal/thermal_zone*/temp. Designed to work without psutil
 on generic Linux edge devices (Raspberry Pi, x86 edge servers).
 
-GPU metrics are platform-specific; this probe leaves them as None and
-delegates to a future JetsonProbe / NvidiaProbe.
+GPU metrics are platform-specific; use NvidiaSmiProbe for discrete NVIDIA
+GPUs and JetsonProbe for NVIDIA Jetson integrated GPUs.
 """
 
 from __future__ import annotations
@@ -48,7 +48,7 @@ class ProcfsProbe(PlatformProbe):
         return PlatformCaps(
             has_cpu=os.path.isfile(self.STAT_PATH),
             has_mem=os.path.isfile(self.MEMINFO_PATH),
-            has_gpu=False,  # TODO: Jetson/Nvidia/Mali probe integration.
+            has_gpu=False,
             has_temp_sensor=self._thermal_path is not None,
             has_power_sensor=os.path.isdir("/sys/class/power_supply"),
             platform_name="linux-procfs",

@@ -95,12 +95,38 @@ GPU mem: 2169 MB
 
 ## Quick Demo
 
+### 在线演示（无需安装）
+
+直接访问 GitHub Pages 上的实时看板：
+
+📊 **[https://gypg.github.io/ai-edge-monitor/](https://gypg.github.io/ai-edge-monitor/)**
+
+每 5 分钟由 GitHub Actions runner 自动采集刷新，零安装即可预览。
+
+### 本地一键启动
+
+在 Windows 上双击运行：
+
+```
+launch_dashboard.bat
+```
+
+在 Linux / macOS 上运行：
+
+```bash
+./launch_dashboard.sh
+```
+
+脚本会自动检测 Python、安装依赖并打开浏览器访问 `http://localhost:8080`。
+
+### 命令行方式
+
 ```bash
 pip install -e .
 ai-edge-monitor run --duration 30
 ```
 
-**在线看板预览**：打开 [`docs/dashboard.html`](docs/dashboard.html)，
+**实时看板**：打开 [`docs/dashboard.html`](docs/dashboard.html)，
 启动本地监控后会自动连接 `localhost:8080` 显示实时指标。
 
 也可以用 YAML 配置文件运行：

@@ -112,13 +112,14 @@
 
   <div class="info-box" id="how-to">
     <h3>如何使用这个看板</h3>
-    <ol>
-      <li>安装项目：<code>pip install -e .</code></li>
-      <li>启动监控：<code>ai-edge-monitor run --web-dashboard</code></li>
-      <li>打开本页面，等待上方状态点变为绿色</li>
-    </ol>
-    <p style="margin-top:12px">
-      如果没有本地服务，页面会显示“Disconnected”，指标保持为 <code>--</code>。
+    <p>
+      <strong>本地模式</strong>：在本地运行
+      <code>ai-edge-monitor run --web-dashboard</code> 后，刷新本页面即可看到本机实时指标。
+    </p>
+    <p>
+      <strong>在线演示</strong>：
+      <a href="https://gypg.github.io/ai-edge-monitor/" target="_blank">https://gypg.github.io/ai-edge-monitor/</a>
+      每 5 分钟由 GitHub Actions runner 自动采集并刷新，无需安装。
     </p>
   </div>
 
@@ -198,9 +199,8 @@ let connected = false;
 
 async function poll() {
   try {
-    const [summary, system] = await Promise.all([
-      fetch(`${API_BASE}/api/summary`).then(r => r.json()),
-      fetch(`${API_BASE}/api/system`).then(r => r.json()).catch(() => ({}))
+    const [summary] = await Promise.all([
+      fetch(`${API_BASE}/api/summary`).then(r => r.json())
     ]);
 
     connected = true;

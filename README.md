@@ -108,7 +108,7 @@ ai-edge-monitor run --duration 30
 ```
 
 **在线看板预览**：打开 [`docs/dashboard.html`](docs/dashboard.html)，
-启动本地监控后会自动连接 `localhost:8080` 显示实时指标。
+启动本地监控后会自动连接 `localhost:17429` 显示实时指标。
 
 也可以用 YAML 配置文件运行：
 
@@ -348,12 +348,12 @@ ai-edge-monitor scenario --scenario inference --duration 60 --out docs/test_repo
 
 ```bash
 # 方式一：CLI 子命令
-ai-edge-monitor dashboard --port 8080 --duration 300
+ai-edge-monitor dashboard --port 17429 --duration 300
 
 # 方式二：独立启动脚本
-python dashboard.py --port 8080 --force-dummy   # 测试模式（dummy 探针）
+python dashboard.py --port 17429 --force-dummy   # 测试模式（dummy 探针）
 
-# 访问 http://<device-ip>:8080
+# 访问 http://<device-ip>:17429
 ```
 
 仪表盘功能：
@@ -786,14 +786,14 @@ ai-edge-monitor run --duration 60 --out reports/x86
 
 ### Docker
 
-快速构建镜像并启动 Web 仪表盘（默认端口 `8080`）：
+快速构建镜像并启动 Web 仪表盘（默认端口 `17429`）：
 
 ```bash
 docker build -t ai-edge-monitor:latest .
 docker compose up -d
 ```
 
-然后打开浏览器访问 `http://<server-ip>:8080`，或打开 `docs/dashboard.html` 连接你的服务器地址。
+然后打开浏览器访问 `http://<server-ip>:17429`，或打开 `docs/dashboard.html` 连接你的服务器地址。
 
 如果只运行一次监控任务并生成报告：
 

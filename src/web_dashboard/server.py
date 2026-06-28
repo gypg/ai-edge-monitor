@@ -88,7 +88,7 @@ class DashboardServer:
     host:
         Bind address (default ``"0.0.0.0"``).
     port:
-        Bind port (default ``8080``).
+        Bind port (default ``17429``).
     context:
         Dict of data providers wired to API handlers.
         Expected keys: ``summary_provider``, ``alert_manager``,
@@ -98,7 +98,7 @@ class DashboardServer:
     def __init__(
         self,
         host: str = "0.0.0.0",
-        port: int = 8080,
+        port: int = 17429,
         context: Optional[Dict[str, Any]] = None,
     ) -> None:
         self._host = host
@@ -136,7 +136,7 @@ class DashboardServer:
 
 def create_dashboard_app(
     host: str = "0.0.0.0",
-    port: int = 8080,
+    port: int = 17429,
     context: Optional[Dict[str, Any]] = None,
 ) -> DashboardServer:
     """Factory function for creating a configured dashboard server."""

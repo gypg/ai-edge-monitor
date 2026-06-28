@@ -21,7 +21,7 @@ RUN python -m pip install --upgrade pip \
     && python -m pip install -e ".[all]"
 
 # Web dashboard port
-EXPOSE 8080
+EXPOSE 17429
 
 # Default: start web dashboard on all interfaces
-CMD ["ai-edge-monitor", "dashboard", "--host", "0.0.0.0", "--port", "8080", "--duration", "86400"]
+CMD ["ai-edge-monitor", "dashboard", "--host", "0.0.0.0", "--port", "17429", "--duration", "86400"]

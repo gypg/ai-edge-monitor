@@ -4,7 +4,7 @@ services:
     image: ai-edge-monitor:latest
     container_name: ai-edge-monitor
     ports:
-      - "8080:8080"
+      - "17429:17429"
     volumes:
       - ./reports:/app/reports
     # Override default command if you prefer one-shot run instead of dashboard

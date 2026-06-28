@@ -409,12 +409,12 @@ The web dashboard provides a real-time monitoring UI accessible from any browser
 
 ```bash
 # CLI subcommand
-ai-edge-monitor dashboard --port 8080 --duration 300
+ai-edge-monitor dashboard --port 17429 --duration 300
 
 # Standalone script
-python dashboard.py --port 8080 --force-dummy  # Test mode
+python dashboard.py --port 17429 --force-dummy  # Test mode
 
-# Access: http://<device-ip>:8080
+# Access: http://<device-ip>:17429
 ```
 
 ### 7.2 Dashboard Features
@@ -438,7 +438,7 @@ server {
     ssl_certificate_key /etc/ssl/private/monitor.key;
 
     location / {
-        proxy_pass http://127.0.0.1:8080;
+        proxy_pass http://127.0.0.1:17429;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";

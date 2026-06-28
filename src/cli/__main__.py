@@ -61,7 +61,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
     dash_parser = sub.add_parser("dashboard", help="start real-time web dashboard")
     dash_parser.add_argument("--host", type=str, default="0.0.0.0")
-    dash_parser.add_argument("--port", type=int, default=8080)
+    dash_parser.add_argument("--port", type=int, default=17429)
     dash_parser.add_argument("--config", type=str, default=None)
     dash_parser.add_argument("--force-dummy", action="store_true",
                              help="use dummy probes (for testing)")

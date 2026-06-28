@@ -105,7 +105,7 @@
     <p>
       本页面是一个<strong>纯前端实时看板</strong>。在本地运行
       <code>ai-edge-monitor run --duration 300 --web-dashboard</code> 后，
-      本页面会自动连接本地 <code>http://localhost:8080</code> 的 API，
+      本页面会自动连接本地 <code>http://localhost:17429</code> 的 API，
       实时展示当前电脑的 CPU、内存、GPU、温度、功耗等指标。
     </p>
   </div>
@@ -175,7 +175,7 @@
 </div>
 
 <script>
-const API_BASE = 'http://localhost:8080';
+const API_BASE = 'http://localhost:17429';
 const POLL_INTERVAL = 3000;
 
 function fmt(value, digits = 1) {
@@ -205,7 +205,7 @@ async function poll() {
     connected = true;
     const dot = document.getElementById('conn-dot');
     dot.className = 'status-dot ok';
-    document.getElementById('conn-label').textContent = 'Connected to localhost:8080';
+    document.getElementById('conn-label').textContent = 'Connected to localhost:17429';
 
     const cpu = summary.cpu_avg;
     const mem = summary.mem_used_avg_mb;

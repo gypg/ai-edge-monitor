@@ -1,13 +1,18 @@
 # ai-edge-monitor
 
+> **中文**：面向 Jetson、Raspberry Pi 与 x86 边缘服务器的 AI 推理性能评估系统。  
+> **English**: AI Inference Performance Evaluation System for Jetson, Raspberry Pi, and x86 Edge Servers.
+
 ![tests](https://github.com/gypg/ai-edge-monitor/actions/workflows/test.yml/badge.svg)
 ![C++ Sanitizers](https://github.com/gypg/ai-edge-monitor/actions/workflows/cpp-sanitizers.yml/badge.svg)
 ![Python 3.8+](https://img.shields.io/badge/python-3.8%20%7C%203.10%20%7C%203.12-blue)
 ![License](https://img.shields.io/badge/license-Proprietary-orange)
 
-## 这个项目解决什么问题？
+## 这个项目解决什么问题？ / What problem does this solve?
 
-**一句话回答：给定一台边缘设备和一个 AI 模型，告诉你能不能跑、能跑多快、瓶颈在哪、怎么优化。**
+**中文一句话：给定一台边缘设备和一个 AI 模型，告诉你能不能跑、能跑多快、瓶颈在哪、怎么优化。**
+
+**In one sentence: given an edge device and an AI model, tell you whether it can run, how fast, where the bottleneck is, and how to optimize.**
 
 嵌入式 AI 开发者最常遇到的问题：
 
@@ -44,9 +49,11 @@
   告警: 内存泄漏风险，建议检查 TensorRT context 生命周期
 ```
 
-### 项目定位
+### 项目定位 / Project Positioning
 
-> 这个项目来源于嵌入式 AI 社区的实际需求——有人提出需要一个工具来**计算边缘设备能承受的 AI 推理性能上限**，并给出了相关的计算方法和参考框架。`ai-edge-monitor` 就是基于这些方法论，用工程化的方式实现出来的一套完整工具链。
+> **中文**：这个项目来源于嵌入式 AI 社区的实际需求——有人提出需要一个工具来**计算边缘设备能承受的 AI 推理性能上限**，并给出了相关的计算方法和参考框架。`ai-edge-monitor` 就是基于这些方法论，用工程化的方式实现出来的一套完整工具链。
+
+> **English**: This project comes from real needs in the embedded AI community — a tool to **calculate the upper bound of AI inference performance an edge device can sustain**, with methodologies and reference frameworks. `ai-edge-monitor` implements this as a complete engineering toolchain.
 
 核心能力对照：
 
@@ -148,18 +155,18 @@ ai-edge-monitor run --duration 30 --force-dummy --out reports/demo
 ai-edge-monitor scenario --duration 60 --out docs/test_report/scenarios
 ```
 
-## 核心特性
+## 核心特性 / Core Features
 
-- **双路采集**：通用指标（CPU/内存/温度/GPU）走 `platform_adapter`，板级功耗走独立的 `power_monitor`，两路独立降频/熔断、互不阻塞
-- **跨平台探测链**：`nvidia-smi → procfs → psutil → dummy` 自动选源；`sysfs power_supply → dummy` 同理；缺源时打 WARNING 而非崩溃；有 NVIDIA GPU 时自动组合 psutil + nvidia-smi 探测链，CPU/内存和 GPU 指标同时采集
-- **非忙等定时**：所有采样器统一用 `time.monotonic()` + `sleep` 漂移补偿，绝不 spin
-- **聚合层无重算**：`aggregator_analyzer` 直接消费 `PowerStatsFrame`，不重做窗口统计，避免与 `power_monitor` 双向漂移
-- **零依赖回退**：`visualizer` 在没有 matplotlib 时用 stdlib `zlib` + 手写 PNG chunk 渲染合法报告 + JSON sidecar，CI 不需要装图形库
-- **配置驱动编排**：`config_manager` 支持 YAML 默认值/文件/CLI 覆盖，`app_orchestrator` 统一装配采集、分析、导出和报告
-- **Prometheus 指标暴露**：`prometheus_exporter` 可把窗口摘要转成 Prometheus text exposition，并可用 stdlib HTTP server 暴露 `/metrics`
-- **容器化演示**：提供 `Dockerfile` / `docker-compose.yml`，方便隔离环境中跑 dummy 监控闭环
-- **推理负载示例**：`examples/inference_demo.py` 用纯 Python 模拟持续推理负载，可与监控命令并行验证报告效果
-- **场景驱动**：`src/scenarios/` 提供 idle / inference / throttled 三种合成负载，无真机也能预演分析能力
+- **双路采集 / Dual-path collection**：通用指标（CPU/内存/温度/GPU）走 `platform_adapter`，板级功耗走独立的 `power_monitor`，两路独立降频/熔断、互不阻塞
+- **跨平台探测链 / Cross-platform probe chain**：`nvidia-smi → procfs → psutil → dummy` 自动选源；`sysfs power_supply → dummy` 同理；缺源时打 WARNING 而非崩溃；有 NVIDIA GPU 时自动组合 psutil + nvidia-smi 探测链，CPU/内存和 GPU 指标同时采集
+- **非忙等定时 / Non-busy-wait scheduling**：所有采样器统一用 `time.monotonic()` + `sleep` 漂移补偿，绝不 spin
+- **聚合层无重算 / No double aggregation**：`aggregator_analyzer` 直接消费 `PowerStatsFrame`，不重做窗口统计，避免与 `power_monitor` 双向漂移
+- **零依赖回退 / Zero-dependency fallback**：`visualizer` 在没有 matplotlib 时用 stdlib `zlib` + 手写 PNG chunk 渲染合法报告 + JSON sidecar，CI 不需要装图形库
+- **配置驱动编排 / Config-driven orchestration**：`config_manager` 支持 YAML 默认值/文件/CLI 覆盖，`app_orchestrator` 统一装配采集、分析、导出和报告
+- **Prometheus 指标暴露 / Prometheus metrics**：`prometheus_exporter` 可把窗口摘要转成 Prometheus text exposition，并可用 stdlib HTTP server 暴露 `/metrics`
+- **容器化演示 / Containerized demo**：提供 `Dockerfile` / `docker-compose.yml`，方便隔离环境中跑 dummy 监控闭环
+- **推理负载示例 / Inference workload example**：`examples/inference_demo.py` 用纯 Python 模拟持续推理负载，可与监控命令并行验证报告效果
+- **场景驱动 / Scenario-driven**：`src/scenarios/` 提供 idle / inference / throttled 三种合成负载，无真机也能预演分析能力
 
 ## 嵌入式 AI 性能优化场景
 
@@ -779,10 +786,20 @@ ai-edge-monitor run --duration 60 --out reports/x86
 
 ### Docker
 
+快速构建镜像并启动 Web 仪表盘（默认端口 `8080`）：
+
 ```bash
 docker build -t ai-edge-monitor:latest .
-mkdir -p reports
-docker compose up --build ai-edge-monitor
+docker compose up -d
+```
+
+然后打开浏览器访问 `http://<server-ip>:8080`，或打开 `docs/dashboard.html` 连接你的服务器地址。
+
+如果只运行一次监控任务并生成报告：
+
+```bash
+docker run --rm -v $(pwd)/reports:/app/reports ai-edge-monitor:latest \
+    ai-edge-monitor run --duration 60 --out /app/reports/run1
 ```
 
 ### ROS2

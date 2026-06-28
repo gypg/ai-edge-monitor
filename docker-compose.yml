@@ -1,8 +1,12 @@
 services:
   ai-edge-monitor:
     build: .
-    image: ai-edge-monitor:local
+    image: ai-edge-monitor:latest
+    container_name: ai-edge-monitor
+    ports:
+      - "8080:8080"
     volumes:
-      - ./monitor.yaml:/app/monitor.yaml:ro
       - ./reports:/app/reports
-    command: ["ai-edge-monitor", "run", "--config", "/app/monitor.yaml", "--force-dummy"]
+    # Override default command if you prefer one-shot run instead of dashboard
+    # command: ["ai-edge-monitor", "run", "--duration", "300", "--out", "/app/reports"]
+    restart: unless-stopped

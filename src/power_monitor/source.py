@@ -160,14 +160,15 @@ class SysfsPowerSource(PowerSource):
         - On hosts without `/sys/class/power_supply` (Windows, macOS, or
           Linux without a battery driver), `is_available()` returns False
           and `read_once()` returns `status="not_supported"`.
-        - TODO: extend selection to honor a configured device name.
+        - Pass `device_name` to prefer a specific entry under `base_dir`.
     """
 
     name = "sysfs"
     BASE_DIR = "/sys/class/power_supply"
 
-    def __init__(self, base_dir: Optional[str] = None) -> None:
+    def __init__(self, base_dir: Optional[str] = None, device_name: Optional[str] = None) -> None:
         self.base_dir = base_dir or self.BASE_DIR
+        self._device_name = device_name
         self._chosen_path: Optional[str] = None
         self._mode: Optional[Literal["power_now", "iv"]] = None
         self._probe()
@@ -179,6 +180,22 @@ class SysfsPowerSource(PowerSource):
             entries = sorted(os.listdir(self.base_dir))
         except OSError:
             return
+
+        # If a specific device name is requested, try it first.
+        if self._device_name:
+            preferred = os.path.join(self.base_dir, self._device_name)
+            if os.path.isdir(preferred):
+                if os.path.isfile(os.path.join(preferred, "power_now")):
+                    self._chosen_path = preferred
+                    self._mode = "power_now"
+                    return
+                if os.path.isfile(os.path.join(preferred, "current_now")) and os.path.isfile(
+                    os.path.join(preferred, "voltage_now")
+                ):
+                    self._chosen_path = preferred
+                    self._mode = "iv"
+                    return
+
         for entry in entries:
             path = os.path.join(self.base_dir, entry)
             if os.path.isfile(os.path.join(path, "power_now")):

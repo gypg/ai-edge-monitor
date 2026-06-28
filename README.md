@@ -480,9 +480,9 @@ python examples/generate_scenario_reports.py --duration-sec 60
 ```
 scenario      cpu_avg  cpu_max  pwr_avg  pwr_max   energy temp_max
 ------------------------------------------------------------------
-idle             5.02     5.99     1.98     2.15   122.52    38.79
-inference       76.58    95.98     8.01     9.17   500.18    63.83
-throttled       63.72    92.56     6.00     8.83   342.90    80.12
+idle             4.94     5.99     1.97     2.15   121.97    38.80
+inference       76.41    95.98     8.09     9.17   493.57    63.83
+throttled       63.69    92.26     5.99     8.81   337.59    79.97
 ```
 
 ### CLI: 离线渲染报告

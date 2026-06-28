@@ -103,9 +103,9 @@ PYTHONIOENCODING=utf-8 python examples/generate_scenario_reports.py --duration-s
 
 | 场景 | cpu_avg | cpu_max | pwr_avg | pwr_max | energy(J) | temp_max | 报告 PNG |
 |---|---:|---:|---:|---:|---:|---:|---|
-| idle      |  5.02% |  5.99% | 1.98W | 2.15W | 122.52 | 38.79°C | [report_idle.png](scenarios/report_idle.png) |
-| inference | 76.58% | 95.98% | 8.01W | 9.17W | 500.18 | 63.83°C | [report_inference.png](scenarios/report_inference.png) |
-| throttled | 63.72% | 92.56% | 6.00W | 8.83W | 342.90 | 80.12°C | [report_throttled.png](scenarios/report_throttled.png) |
+| idle      |  4.94% |  5.99% | 1.97W | 2.15W | 121.97 | 38.80°C | [report_idle.png](scenarios/report_idle.png) |
+| inference | 76.41% | 95.98% | 8.09W | 9.17W | 493.57 | 63.83°C | [report_inference.png](scenarios/report_inference.png) |
+| throttled | 63.69% | 92.26% | 5.99W | 8.81W | 337.59 | 79.97°C | [report_throttled.png](scenarios/report_throttled.png) |
 
 完整逐字段汇总：[scenarios/scenario_summary.json](scenarios/scenario_summary.json)
 
@@ -113,10 +113,10 @@ PYTHONIOENCODING=utf-8 python examples/generate_scenario_reports.py --duration-s
 
 ### A.7.4 与设计目标的对照
 
-- **idle 场景**：cpu_avg 5.02% vs 目标 5%（误差 0.4%），pwr_avg 1.98W vs 目标 2W（误差 1%）。✅
-- **inference 场景**：cpu_avg 76.58% vs 目标 75%，cpu_max 95.98% 来自每 12 秒一次的 +18% 尖峰（目标 ~95%）；pwr_avg 8.01W vs 目标 8W；尖峰跟随 CPU 在 ~9W 出现。✅
-- **throttled 场景**：cpu_max 92.56% 出现在 0~20s 爬坡末段（接近目标 95%），cpu_avg 63.72% 反映"先冲高再稳态降频"的整体均值（目标 60% 平台期，因为前 20s 高负载拉高了均值）；temp_max 80.12°C 触发热墙（设计阈值 80°C）后 CPU 跌至 60% 平台期、功耗对应跌至 ~5W。✅
-- **能量对比**：500.18J（inference）> 342.90J（throttled）> 122.52J（idle）——同样 60s 时长下，能量积分严格遵循"持续高负载 > 受限高负载 > 空闲"的预期。✅
+- **idle 场景**：cpu_avg 4.94% vs 目标 5%（误差 1.2%），pwr_avg 1.97W vs 目标 2W（误差 1.5%）。✅
+- **inference 场景**：cpu_avg 76.41% vs 目标 75%，cpu_max 95.98% 来自每 12 秒一次的 +18% 尖峰（目标 ~95%）；pwr_avg 8.09W vs 目标 8W；尖峰跟随 CPU 在 ~9W 出现。✅
+- **throttled 场景**：cpu_max 92.26% 出现在 0~20s 爬坡末段（接近目标 95%），cpu_avg 63.69% 反映"先冲高再稳态降频"的整体均值（目标 60% 平台期，因为前 20s 高负载拉高了均值）；temp_max 79.97°C 触发热墙（设计阈值 80°C）后 CPU 跌至 60% 平台期、功耗对应跌至 ~5W。✅
+- **能量对比**：493.57J（inference）> 337.59J（throttled）> 121.97J（idle）——同样 60s 时长下，能量积分严格遵循"持续高负载 > 受限高负载 > 空闲"的预期。✅
 
 ### A.7.5 这能证明什么 / 不能证明什么
 

@@ -21,7 +21,7 @@
 - "TensorRT 量化后到底提升了多少？CPU 和 GPU 谁是瓶颈？"
 - "长时间运行会不会内存泄漏？功耗会不会超预算？"
 
-`ai-edge-monitor` 就是为了解决这些问题而生的。它不是通用的系统监控工具，而是一个**专门面向 AI 推理部署的性能评估系统**——它能：
+`ai-edge-monitor`（中文名：**边缘 AI 性能监测仪**）就是为了解决这些问题而生的。它不是通用的系统监控工具，而是一个**专门面向 AI 推理部署的性能评估系统**——它能：
 
 1. **采集**真实的硬件指标（CPU/GPU/内存/温度/功耗）
 2. **分析**推理性能（FPS、延迟 P95/P99、GPU 利用率）
@@ -51,13 +51,13 @@
 
 ### 项目定位 / Project Positioning
 
-> **中文**：这个项目来源于嵌入式 AI 社区的实际需求——有人提出需要一个工具来**计算边缘设备能承受的 AI 推理性能上限**，并给出了相关的计算方法和参考框架。`ai-edge-monitor` 就是基于这些方法论，用工程化的方式实现出来的一套完整工具链。
+> **中文**：这个项目来源于嵌入式 AI 社区的实际需求——有人提出需要一个工具来**计算边缘设备能承受的 AI 推理性能上限**，并给出了相关的计算方法和参考框架。`ai-edge-monitor`（边缘 AI 性能监测仪）就是基于这些方法论，用工程化的方式实现出来的一套完整工具链。
 
 > **English**: This project comes from real needs in the embedded AI community — a tool to **calculate the upper bound of AI inference performance an edge device can sustain**, with methodologies and reference frameworks. `ai-edge-monitor` implements this as a complete engineering toolchain.
 
 核心能力对照：
 
-| 你想知道的 | ai-edge-monitor 怎么回答 |
+| 你想知道的 | 边缘 AI 性能监测仪怎么回答 |
 |-----------|------------------------|
 | 这个设备能跑这个模型吗？ | `assess_deployment_readiness()` → ready/marginal/not_ready |
 | 最大能跑到多少 FPS？ | `InferenceBenchmark.run_simulated()` + `DeploymentScorer` |
@@ -72,7 +72,7 @@
 
 > **面向 Jetson、Raspberry Pi、x86 边缘服务器的 AI 推理性能评估系统。**
 
-`ai-edge-monitor` 把"采集 → 分析 → 诊断 → 评分 → 建议"打通成一条独立、低开销、可旁路降级的链路：每个模块都自带基线测试与集成测试，关键路径在开发机上 30s × 100ms 空跑的 CPU 增量 < 0.05ms、RSS 增量 < 0.05MB。
+`ai-edge-monitor`（边缘 AI 性能监测仪）把"采集 → 分析 → 诊断 → 评分 → 建议"打通成一条独立、低开销、可旁路降级的链路：每个模块都自带基线测试与集成测试，关键路径在开发机上 30s × 100ms 空跑的 CPU 增量 < 0.05ms、RSS 增量 < 0.05MB。
 
 ## 实测输出
 
@@ -172,7 +172,7 @@ ai-edge-monitor scenario --duration 60 --out docs/test_report/scenarios
 
 ### 解决开发者核心痛点
 
-嵌入式 AI 开发者（尤其是视觉模型部署方向）面临以下挑战，`ai-edge-monitor` 直接解决：
+嵌入式 AI 开发者（尤其是视觉模型部署方向）面临以下挑战，`ai-edge-monitor`（边缘 AI 性能监测仪）直接解决：
 
 1. **性能优化验证**
    - **痛点**：如何量化评估"用最低 CPU 达到最高帧率且延迟低"的效果？
@@ -529,7 +529,7 @@ ai-edge-monitor/
 ├── .github/workflows/
 │   └── test.yml                    # CI: lint + matrix py3.8/3.10/3.12
 ├── src/
-│   ├── cli/                        # ai-edge-monitor 主 CLI
+│   ├── cli/                        # 边缘 AI 性能监测仪主 CLI
 │   │   └── __main__.py             # run / report / scenario 子命令
 │   ├── config_manager/             # YAML 配置 + CLI 覆盖合并
 │   │   └── config.py               # MonitorConfig / load_config

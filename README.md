@@ -100,6 +100,9 @@ pip install -e .
 ai-edge-monitor run --duration 30
 ```
 
+**在线看板预览**：打开 [`docs/dashboard.html`](docs/dashboard.html)，
+启动本地监控后会自动连接 `localhost:8080` 显示实时指标。
+
 也可以用 YAML 配置文件运行：
 
 ```yaml

@@ -1,6 +1,6 @@
 # ai-edge-monitor
 
-> **中文**：面向 Jetson、Raspberry Pi 与 x86 边缘服务器的 AI 推理性能评估系统。  
+> **中文**：面向 Jetson、Raspberry Pi 与 x86 边缘服务器的 AI 推理性能评估系统。
 > **English**: AI Inference Performance Evaluation System for Jetson, Raspberry Pi, and x86 Edge Servers.
 
 ![tests](https://github.com/gypg/ai-edge-monitor/actions/workflows/test.yml/badge.svg)

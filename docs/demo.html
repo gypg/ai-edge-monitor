@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>边缘 AI 性能监测仪 · 演示看板</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #0f1117;
+    --card: #1a1d27;
+    --border: #2a2d3a;
+    --text: #e0e0e0;
+    --text-dim: #888;
+    --accent: #4fc3f7;
+    --green: #66bb6a;
+    --yellow: #ffa726;
+    --red: #ef5350;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--bg); color: var(--text); min-height: 100vh;
+  }
+  header {
+    background: var(--card); border-bottom: 1px solid var(--border);
+    padding: 16px 24px; display: flex; align-items: center; gap: 16px;
+    position: sticky; top: 0; z-index: 10;
+  }
+  header h1 { font-size: 18px; font-weight: 600; color: var(--accent); }
+  .status-dot {
+    width: 10px; height: 10px; border-radius: 50%; display: inline-block;
+  }
+  .status-dot.ok { background: var(--green); box-shadow: 0 0 8px var(--green); }
+  .header-meta { margin-left: auto; font-size: 12px; color: var(--text-dim); }
+  .container { max-width: 1400px; margin: 0 auto; padding: 24px; }
+  .intro {
+    background: var(--card); border: 1px solid var(--border); border-radius: 8px;
+    padding: 20px; margin-bottom: 24px;
+  }
+  .intro h2 { font-size: 16px; margin-bottom: 8px; color: var(--accent); }
+  .intro p { font-size: 14px; line-height: 1.6; color: var(--text-dim); margin-bottom: 12px; }
+  .intro code {
+    background: rgba(255,255,255,0.05); padding: 2px 6px; border-radius: 4px;
+    font-family: 'SF Mono', Monaco, monospace; font-size: 12px;
+  }
+  .grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px;
+    margin-bottom: 24px;
+  }
+  .card {
+    background: var(--card); border: 1px solid var(--border); border-radius: 8px;
+    padding: 16px; transition: border-color 0.2s;
+  }
+  .card:hover { border-color: var(--accent); }
+  .card h3 {
+    font-size: 12px; color: var(--text-dim); text-transform: uppercase;
+    letter-spacing: 0.5px; margin-bottom: 8px;
+  }
+  .metric-value { font-size: 32px; font-weight: 700; line-height: 1.2; }
+  .metric-value.green { color: var(--green); }
+  .metric-value.yellow { color: var(--yellow); }
+  .metric-value.red { color: var(--red); }
+  .metric-value.accent { color: var(--accent); }
+  .metric-label { font-size: 12px; color: var(--text-dim); margin-top: 4px; }
+  .chart-card { grid-column: 1 / -1; }
+  .chart-row {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px;
+  }
+  .chart-box { position: relative; height: 240px; }
+  .footer {
+    text-align: center; font-size: 12px; color: var(--text-dim);
+    padding: 24px; border-top: 1px solid var(--border); margin-top: 24px;
+  }
+  .footer a { color: var(--accent); text-decoration: none; }
+  .scenario-bar {
+    display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 24px;
+  }
+  .scenario-btn {
+    background: var(--card); border: 1px solid var(--border); color: var(--text);
+    padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 13px;
+  }
+  .scenario-btn.active { border-color: var(--accent); color: var(--accent); }
+  .scenario-btn:hover { border-color: var(--accent); }
+  @media (max-width: 600px) {
+    .grid { grid-template-columns: 1fr; }
+    header { flex-wrap: wrap; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>&#x1F4CA; 边缘 AI 性能监测仪 · 演示看板</h1>
+  <span class="status-dot ok" id="conn-dot"></span>
+  <span id="conn-label" style="font-size:12px">Demo mode</span>
+  <div class="header-meta">Refresh: <span id="last-update">--</span></div>
+</header>
+
+<div class="container">
+  <div class="intro">
+    <h2>项目简介</h2>
+    <p>
+      这是一个<strong>纯前端演示页面</strong>，展示 <strong>ai-edge-monitor（边缘 AI 性能监测仪）</strong>启动后的实时监控效果。
+      页面使用模拟数据驱动，无需安装任何后端或浏览器插件，直接打开即可看到 CPU、内存、GPU、温度、功耗等指标的动态变化。
+    </p>
+    <p>
+      实际部署时，运行 <code>ai-edge-monitor dashboard</code> 后，仪表盘会连接真实的系统传感器数据源。
+    </p>
+  </div>
+
+  <div class="scenario-bar">
+    <button class="scenario-btn active" data-scenario="inference">推理场景</button>
+    <button class="scenario-btn" data-scenario="idle">空闲场景</button>
+    <button class="scenario-btn" data-scenario="throttled">热节流场景</button>
+  </div>
+
+  <div class="grid" id="metrics">
+    <div class="card">
+      <h3>CPU 利用率</h3>
+      <div class="metric-value accent" id="g-cpu">--</div>
+      <div class="metric-label">百分比 (%)</div>
+    </div>
+    <div class="card">
+      <h3>内存使用</h3>
+      <div class="metric-value accent" id="g-mem">--</div>
+      <div class="metric-label">已使用 MB</div>
+    </div>
+    <div class="card">
+      <h3>GPU 利用率</h3>
+      <div class="metric-value accent" id="g-gpu">--</div>
+      <div class="metric-label">百分比 (%)</div>
+    </div>
+    <div class="card">
+      <h3>GPU 显存</h3>
+      <div class="metric-value accent" id="g-gpu-mem">--</div>
+      <div class="metric-label">已使用 MB</div>
+    </div>
+    <div class="card">
+      <h3>温度</h3>
+      <div class="metric-value accent" id="g-temp">--</div>
+      <div class="metric-label">摄氏度 (°C)</div>
+    </div>
+    <div class="card">
+      <h3>功耗</h3>
+      <div class="metric-value accent" id="g-power">--</div>
+      <div class="metric-label">瓦特 (W)</div>
+    </div>
+  </div>
+
+  <div class="card chart-card">
+    <h3 style="margin-bottom:12px">指标趋势</h3>
+    <div class="chart-row">
+      <div class="chart-box"><canvas id="chart-cpu"></canvas></div>
+      <div class="chart-box"><canvas id="chart-mem"></canvas></div>
+      <div class="chart-box"><canvas id="chart-gpu"></canvas></div>
+      <div class="chart-box"><canvas id="chart-power"></canvas></div>
+    </div>
+  </div>
+
+  <div class="intro">
+    <h2>如何使用</h2>
+    <p>
+      1. 克隆项目并安装：<code>pip install -e .</code><br>
+      2. 启动实时监控：<code>ai-edge-monitor dashboard --port 17429</code><br>
+      3. 打开 <code>docs/dashboard.html</code> 即可看到真实数据。
+    </p>
+  </div>
+
+  <div class="footer">
+    <p>
+      <a href="https://github.com/gypg/ai-edge-monitor" target="_blank">GitHub</a> ·
+      <a href="docs/architecture.md">架构文档</a> ·
+      <a href="docs/embedded_device_compatibility.md">设备兼容性</a>
+    </p>
+    <p style="margin-top:8px">Demo page for ai-edge-monitor v2.0.0</p>
+  </div>
+</div>
+
+<script>
+const POLL_INTERVAL = 1000;
+const MAX_POINTS = 60;
+
+const SCENARIOS = {
+  inference: { cpu: 76, mem: 8200, gpu: 72, gpuMem: 2169, temp: 63, power: 8.0, jitter: 2.0 },
+  idle: { cpu: 5, mem: 4100, gpu: 0, gpuMem: 180, temp: 39, power: 2.0, jitter: 0.5 },
+  throttled: { cpu: 63, mem: 7600, gpu: 55, gpuMem: 1850, temp: 79, power: 6.0, jitter: 1.5 },
+};
+
+let currentScenario = 'inference';
+let tick = 0;
+
+function fmt(value, digits = 1) {
+  if (value == null || Number.isNaN(value)) return '--';
+  return value.toFixed(digits);
+}
+
+function noise(jitter) {
+  return (Math.random() - 0.5) * jitter;
+}
+
+function nextValue(base, jitter, min, max) {
+  let v = base + noise(jitter);
+  if (min != null) v = Math.max(min, v);
+  if (max != null) v = Math.min(max, v);
+  return v;
+}
+
+function setColor(element, value, warn, crit) {
+  element.classList.remove('green', 'yellow', 'red', 'accent');
+  if (value == null || Number.isNaN(value)) {
+    element.classList.add('accent');
+    return;
+  }
+  if (crit != null && value >= crit) element.classList.add('red');
+  else if (warn != null && value >= warn) element.classList.add('yellow');
+  else element.classList.add('green');
+}
+
+function makeChart(ctx, label, color) {
+  return new Chart(ctx, {
+    type: 'line',
+    data: { labels: [], datasets: [{
+      label, data: [],
+      borderColor: color, backgroundColor: color + '22',
+      borderWidth: 1.5, fill: true, tension: 0.4, pointRadius: 0,
+    }] },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      animation: { duration: 200 },
+      scales: {
+        x: { display: false },
+        y: { min: 0, grid: { color: '#2a2d3a' }, ticks: { color: '#888', font: { size: 10 } } }
+      },
+      plugins: { legend: { display: true, labels: { color: '#888', font: { size: 12 } } } }
+    }
+  });
+}
+
+const chartCpu = makeChart(document.getElementById('chart-cpu').getContext('2d'), 'CPU %', '#4fc3f7');
+const chartMem = makeChart(document.getElementById('chart-mem').getContext('2d'), 'Memory MB', '#66bb6a');
+const chartGpu = makeChart(document.getElementById('chart-gpu').getContext('2d'), 'GPU %', '#ffa726');
+const chartPower = makeChart(document.getElementById('chart-power').getContext('2d'), 'Power W', '#ef5350');
+
+function pushChart(chart, label, value) {
+  chart.data.labels.push(label);
+  chart.data.datasets[0].data.push(value);
+  if (chart.data.labels.length > MAX_POINTS) {
+    chart.data.labels.shift();
+    chart.data.datasets[0].data.shift();
+  }
+  chart.update('none');
+}
+
+function updateButtons() {
+  document.querySelectorAll('.scenario-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.scenario === currentScenario);
+  });
+}
+
+function poll() {
+  const cfg = SCENARIOS[currentScenario];
+
+  // Add scenario dynamics
+  const cpu = nextValue(cfg.cpu, cfg.jitter * 3, 0, 100);
+  const mem = nextValue(cfg.mem, cfg.jitter * 100, 2000, 16000);
+  const gpu = nextValue(cfg.gpu, cfg.jitter * 2, 0, 100);
+  const gpuMem = nextValue(cfg.gpuMem, cfg.jitter * 30, 0, 8000);
+  const temp = nextValue(cfg.temp, cfg.jitter * 1.5, 30, 100);
+  const power = nextValue(cfg.power, cfg.jitter * 0.3, 0, 30);
+
+  const cpuEl = document.getElementById('g-cpu');
+  cpuEl.textContent = fmt(cpu);
+  setColor(cpuEl, cpu, 70, 90);
+
+  const memEl = document.getElementById('g-mem');
+  memEl.textContent = fmt(mem, 0);
+  setColor(memEl, mem / 16000 * 100, 70, 85);
+
+  const gpuEl = document.getElementById('g-gpu');
+  gpuEl.textContent = fmt(gpu);
+  setColor(gpuEl, gpu, 70, 90);
+
+  const gpuMemEl = document.getElementById('g-gpu-mem');
+  gpuMemEl.textContent = fmt(gpuMem, 0);
+  setColor(gpuMemEl, gpuMem / 8000 * 100, 70, 85);
+
+  const tempEl = document.getElementById('g-temp');
+  tempEl.textContent = fmt(temp);
+  setColor(tempEl, temp, 60, 80);
+
+  const powerEl = document.getElementById('g-power');
+  powerEl.textContent = fmt(power);
+  setColor(powerEl, power / 15 * 100, 50, 80);
+
+  const now = new Date().toLocaleTimeString();
+  pushChart(chartCpu, now, cpu);
+  pushChart(chartMem, now, mem);
+  pushChart(chartGpu, now, gpu);
+  pushChart(chartPower, now, power);
+
+  document.getElementById('last-update').textContent = now;
+  tick++;
+}
+
+document.querySelectorAll('.scenario-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    currentScenario = btn.dataset.scenario;
+    updateButtons();
+  });
+});
+
+poll();
+setInterval(poll, POLL_INTERVAL);
+</script>
+
+</body>
+</html>

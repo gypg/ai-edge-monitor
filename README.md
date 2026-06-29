@@ -110,6 +110,10 @@ ai-edge-monitor run --duration 30
 **在线看板预览**：打开 [`docs/dashboard.html`](docs/dashboard.html)，
 启动本地监控后会自动连接 `localhost:17429` 显示实时指标。
 
+**零安装演示**：直接打开 [`docs/demo.html`](docs/demo.html)，
+无需后端即可预览边缘 AI 性能监测仪的实时监控效果（CPU / 内存 / GPU / 温度 / 功耗），
+支持推理、空闲、热节流三种场景切换。
+
 也可以用 YAML 配置文件运行：
 
 ```yaml
